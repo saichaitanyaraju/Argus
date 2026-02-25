@@ -22,3 +22,15 @@ enabled = false
 
 [edge_runtime]
 enabled = true
+
+[functions.get-dashboard]
+verify_jwt = false
+
+[functions.agent-brain]
+verify_jwt = false
+
+[functions.process-upload]
+verify_jwt = false
+
+[functions.export-report]
+verify_jwt = false
