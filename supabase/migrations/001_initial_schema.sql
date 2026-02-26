@@ -7,11 +7,7 @@
 -- Uploads table
 CREATE TABLE IF NOT EXISTS uploads (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-<<<<<<< HEAD
-  module text NOT NULL CHECK (module IN ('manpower','equipment','progress')),
-=======
   module text NOT NULL CHECK (module IN ('manpower','equipment','progress','cost')),
->>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
   storage_path text NOT NULL,
   original_name text NOT NULL,
   uploaded_at timestamptz DEFAULT now() NOT NULL
@@ -78,18 +74,30 @@ ALTER TABLE progress_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dashboard_specs ENABLE ROW LEVEL SECURITY;
 
 -- PUBLIC policies (replace with auth-based policies when auth is added)
+-- avoid errors if policies already exist
+DROP POLICY IF EXISTS "public_select_uploads" ON uploads;
+DROP POLICY IF EXISTS "public_insert_uploads" ON uploads;
 CREATE POLICY "public_select_uploads" ON uploads FOR SELECT USING (true);
 CREATE POLICY "public_insert_uploads" ON uploads FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "public_select_manpower" ON manpower_records;
+DROP POLICY IF EXISTS "public_insert_manpower" ON manpower_records;
 CREATE POLICY "public_select_manpower" ON manpower_records FOR SELECT USING (true);
 CREATE POLICY "public_insert_manpower" ON manpower_records FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "public_select_equipment" ON equipment_records;
+DROP POLICY IF EXISTS "public_insert_equipment" ON equipment_records;
 CREATE POLICY "public_select_equipment" ON equipment_records FOR SELECT USING (true);
 CREATE POLICY "public_insert_equipment" ON equipment_records FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "public_select_progress" ON progress_records;
+DROP POLICY IF EXISTS "public_insert_progress" ON progress_records;
 CREATE POLICY "public_select_progress" ON progress_records FOR SELECT USING (true);
 CREATE POLICY "public_insert_progress" ON progress_records FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "public_select_specs" ON dashboard_specs;
+DROP POLICY IF EXISTS "public_insert_specs" ON dashboard_specs;
+DROP POLICY IF EXISTS "public_update_specs" ON dashboard_specs;
 CREATE POLICY "public_select_specs" ON dashboard_specs FOR SELECT USING (true);
 CREATE POLICY "public_insert_specs" ON dashboard_specs FOR INSERT WITH CHECK (true);
 CREATE POLICY "public_update_specs" ON dashboard_specs FOR UPDATE USING (true);
@@ -109,5 +117,7 @@ CREATE INDEX IF NOT EXISTS idx_cost_date ON cost_records(date);
 CREATE INDEX IF NOT EXISTS idx_cost_discipline ON cost_records(discipline);
 
 ALTER TABLE cost_records ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "public_select_cost" ON cost_records;
+DROP POLICY IF EXISTS "public_insert_cost" ON cost_records;
 CREATE POLICY "public_select_cost" ON cost_records FOR SELECT USING (true);
 CREATE POLICY "public_insert_cost" ON cost_records FOR INSERT WITH CHECK (true);
