@@ -99,13 +99,6 @@ export default function ChatPanel({ module, spec, onHighlightKpi, isOpen, onClos
     } finally { setIsLoading(false) }
   }
 
-<<<<<<< HEAD
-  const renderContent = (content: string) =>
-    content.split('\n').map((line, i) => {
-      const bold = line.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white">$1</strong>')
-      return <p key={i} className="text-sm leading-relaxed text-white/70" dangerouslySetInnerHTML={{ __html: bold }} />
-    })
-=======
   const renderBoldLine = (line: string) => {
     // Simple, safe **bold** rendering without injecting HTML.
     const parts = line.split('**')
@@ -125,7 +118,6 @@ export default function ChatPanel({ module, spec, onHighlightKpi, isOpen, onClos
         {renderBoldLine(line)}
       </p>
     ))
->>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
 
   if (!isOpen) return null
 

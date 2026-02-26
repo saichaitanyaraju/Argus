@@ -22,18 +22,3 @@ enabled = false
 
 [edge_runtime]
 enabled = true
-<<<<<<< HEAD
-
-[functions.get-dashboard]
-verify_jwt = false
-
-[functions.agent-brain]
-verify_jwt = false
-
-[functions.process-upload]
-verify_jwt = false
-
-[functions.export-report]
-verify_jwt = false
-=======
->>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)

@@ -47,11 +47,7 @@ npm install -g supabase
 ### 2.2 Login and link project
 ```bash
 supabase login
-<<<<<<< HEAD
-supabase link --project-ref inobrxqbqtdzxnywecqdb
-=======
 supabase link --project-ref YOUR_PROJECT_REF
->>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
 ```
 
 ### 2.3 Deploy all functions
@@ -75,11 +71,7 @@ cp .env.example .env.local
 ```
 Edit `.env.local`:
 ```
-<<<<<<< HEAD
-VITE_SUPABASE_URL=https://inobrxqbqtdzxnywecqdb.supabase.co
-=======
 VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
->>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
 VITE_SUPABASE_ANON_KEY=<your anon key from Project Settings → API>
 ```
 
@@ -213,11 +205,7 @@ The upload parser is fuzzy — it normalizes column names. These all work:
 
 - [ ] Authentication (Supabase Auth)
 - [ ] Per-user/per-project data isolation
-<<<<<<< HEAD
-- [ ] XLSX parsing (add `xlsx` npm package to Edge Function)
-=======
 - [x] XLSX parsing (supported in `process-upload` via `xlsx`)
->>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
 - [ ] PDF export (add `pdfmake` or `jspdf`)
 - [ ] Live Vapi voice integration
 - [ ] Optional LLM (Claude API) in `agent-brain` for richer responses

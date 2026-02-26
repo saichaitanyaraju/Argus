@@ -1,8 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-<<<<<<< HEAD
-=======
 import * as XLSX from 'https://esm.sh/xlsx@0.18.5'
->>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,12 +13,7 @@ Deno.serve(async (req) => {
     const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
     const { data: fileData, error: dlErr } = await supabaseAdmin.storage.from('uploads').download(file_path)
     if (dlErr || !fileData) throw new Error(`File download failed: ${dlErr?.message}`)
-<<<<<<< HEAD
-    const text = await fileData.text()
-    const rows = parseCSV(text)
-=======
     const rows = await parseRows(fileData, original_filename)
->>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
     if (!rows.length) throw new Error('File is empty or could not be parsed.')
     await supabaseAdmin.from('uploads').insert({ module, storage_path: file_path, original_name: original_filename })
     const now = new Date().toISOString()
@@ -38,8 +30,6 @@ Deno.serve(async (req) => {
       const norm = rows.map(r => normalizeRow(r, ['date','discipline','planned_progress_pct','actual_progress_pct']))
       await supabaseAdmin.from('progress_records').insert(norm.map(r => ({ date:r.date, discipline:r.discipline, planned_progress_pct:Number(r.planned_progress_pct), actual_progress_pct:Number(r.actual_progress_pct) })))
       spec = computeProgressSpec(norm, now)
-<<<<<<< HEAD
-=======
     } else if (module === 'cost') {
       const norm = rows.map(r => normalizeRow(r, ['date','discipline','budget_amount','actual_spend','cost_code']))
       await supabaseAdmin.from('cost_records').insert(norm.map(r => ({
@@ -50,7 +40,6 @@ Deno.serve(async (req) => {
         cost_code: r.cost_code || null,
       })))
       spec = computeCostSpec(norm, now)
->>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
     } else throw new Error(`Unknown module: ${module}`)
     await supabaseAdmin.from('dashboard_specs').upsert({ module, spec_json:spec, meta_json:spec.meta }, { onConflict:'module' })
     return new Response(JSON.stringify({ spec }), { headers: { ...corsHeaders, 'Content-Type':'application/json' } })
@@ -59,16 +48,6 @@ Deno.serve(async (req) => {
   }
 })
 
-<<<<<<< HEAD
-function parseCSV(text: string) {
-  const lines = text.trim().split(/\r?\n/)
-  if (lines.length < 2) return []
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^["']|["']$/g,''))
-  return lines.slice(1).filter(l => l.trim()).map(line => {
-    const vals = line.split(',').map(v => v.trim().replace(/^["']|["']$/g,''))
-    return Object.fromEntries(headers.map((h,i) => [h, vals[i] ?? '']))
-  })
-=======
 async function parseRows(fileData: Blob, originalFilename: string): Promise<Record<string,string>[]> {
   const lower = (originalFilename || '').toLowerCase()
   if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
@@ -118,7 +97,6 @@ function parseCSVLine(line: string): string[] {
   }
   out.push(cur)
   return out
->>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
 }
 
 function normalizeKey(h: string) { return h.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'') }
@@ -250,8 +228,6 @@ function computeProgressSpec(rows: Record<string,string>[], now: string): Spec {
     lastUpdated: now,
   }
 }
-<<<<<<< HEAD
-=======
 
 function computeCostSpec(rows: Record<string,string>[], now: string): Spec {
   const totalBudget = rows.reduce((s,r)=>s+Number(r.budget_amount||0),0)
@@ -302,4 +278,3 @@ function computeCostSpec(rows: Record<string,string>[], now: string): Spec {
     lastUpdated: now,
   }
 }
->>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)

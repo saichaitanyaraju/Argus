@@ -1,12 +1,7 @@
-<<<<<<< HEAD
-interface Props {
-  children: React.ReactNode
-=======
 import type { ReactNode } from 'react'
 
 interface Props {
   children: ReactNode
->>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
   variant?: 'default' | 'success' | 'warning' | 'danger' | 'info'
   size?: 'sm' | 'md'
 }
