@@ -1,4 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+<<<<<<< HEAD
+=======
+import * as XLSX from 'https://esm.sh/xlsx@0.18.5'
+>>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,8 +16,12 @@ Deno.serve(async (req) => {
     const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
     const { data: fileData, error: dlErr } = await supabaseAdmin.storage.from('uploads').download(file_path)
     if (dlErr || !fileData) throw new Error(`File download failed: ${dlErr?.message}`)
+<<<<<<< HEAD
     const text = await fileData.text()
     const rows = parseCSV(text)
+=======
+    const rows = await parseRows(fileData, original_filename)
+>>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
     if (!rows.length) throw new Error('File is empty or could not be parsed.')
     await supabaseAdmin.from('uploads').insert({ module, storage_path: file_path, original_name: original_filename })
     const now = new Date().toISOString()
@@ -30,6 +38,19 @@ Deno.serve(async (req) => {
       const norm = rows.map(r => normalizeRow(r, ['date','discipline','planned_progress_pct','actual_progress_pct']))
       await supabaseAdmin.from('progress_records').insert(norm.map(r => ({ date:r.date, discipline:r.discipline, planned_progress_pct:Number(r.planned_progress_pct), actual_progress_pct:Number(r.actual_progress_pct) })))
       spec = computeProgressSpec(norm, now)
+<<<<<<< HEAD
+=======
+    } else if (module === 'cost') {
+      const norm = rows.map(r => normalizeRow(r, ['date','discipline','budget_amount','actual_spend','cost_code']))
+      await supabaseAdmin.from('cost_records').insert(norm.map(r => ({
+        date: r.date,
+        discipline: r.discipline,
+        budget_amount: Number(r.budget_amount),
+        actual_spend: Number(r.actual_spend),
+        cost_code: r.cost_code || null,
+      })))
+      spec = computeCostSpec(norm, now)
+>>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
     } else throw new Error(`Unknown module: ${module}`)
     await supabaseAdmin.from('dashboard_specs').upsert({ module, spec_json:spec, meta_json:spec.meta }, { onConflict:'module' })
     return new Response(JSON.stringify({ spec }), { headers: { ...corsHeaders, 'Content-Type':'application/json' } })
@@ -38,6 +59,7 @@ Deno.serve(async (req) => {
   }
 })
 
+<<<<<<< HEAD
 function parseCSV(text: string) {
   const lines = text.trim().split(/\r?\n/)
   if (lines.length < 2) return []
@@ -46,6 +68,57 @@ function parseCSV(text: string) {
     const vals = line.split(',').map(v => v.trim().replace(/^["']|["']$/g,''))
     return Object.fromEntries(headers.map((h,i) => [h, vals[i] ?? '']))
   })
+=======
+async function parseRows(fileData: Blob, originalFilename: string): Promise<Record<string,string>[]> {
+  const lower = (originalFilename || '').toLowerCase()
+  if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
+    const ab = await fileData.arrayBuffer()
+    const wb = XLSX.read(ab, { type: 'array' })
+    const sheetName = wb.SheetNames[0]
+    if (!sheetName) return []
+    const ws = wb.Sheets[sheetName]
+    const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' })
+    return json.map((row) => {
+      const out: Record<string,string> = {}
+      for (const [k, v] of Object.entries(row)) out[String(k)] = String(v ?? '')
+      return out
+    })
+  }
+  const text = await fileData.text()
+  return parseCSV(text)
+}
+
+function parseCSV(text: string) {
+  const lines = text.replace(/^\uFEFF/, '').trim().split(/\r?\n/)
+  if (lines.length < 2) return []
+  const headers = parseCSVLine(lines[0]).map(h => h.trim().replace(/^["']|["']$/g,''))
+  return lines
+    .slice(1)
+    .filter(l => l.trim())
+    .map((line) => {
+      const vals = parseCSVLine(line).map(v => v.trim().replace(/^["']|["']$/g,''))
+      return Object.fromEntries(headers.map((h, i) => [h, vals[i] ?? '']))
+    })
+}
+
+function parseCSVLine(line: string): string[] {
+  const out: string[] = []
+  let cur = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (ch === '"') {
+      const next = line[i + 1]
+      if (inQuotes && next === '"') { cur += '"'; i++; continue }
+      inQuotes = !inQuotes
+      continue
+    }
+    if (ch === ',' && !inQuotes) { out.push(cur); cur = ''; continue }
+    cur += ch
+  }
+  out.push(cur)
+  return out
+>>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
 }
 
 function normalizeKey(h: string) { return h.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'') }
@@ -177,3 +250,56 @@ function computeProgressSpec(rows: Record<string,string>[], now: string): Spec {
     lastUpdated: now,
   }
 }
+<<<<<<< HEAD
+=======
+
+function computeCostSpec(rows: Record<string,string>[], now: string): Spec {
+  const totalBudget = rows.reduce((s,r)=>s+Number(r.budget_amount||0),0)
+  const totalSpent = rows.reduce((s,r)=>s+Number(r.actual_spend||0),0)
+  const variance = totalBudget - totalSpent
+  const variancePct = totalBudget>0 ? ((variance/totalBudget)*100).toFixed(1) : '0.0'
+  const disciplines = [...new Set(rows.map(r=>r.discipline).filter(Boolean))]
+  const dates = [...new Set(rows.map(r=>r.date).filter(Boolean))].sort()
+
+  const status = variance >= 0 ? 'good' : Number(variancePct) >= -5 ? 'warning' : 'danger'
+
+  const byDiscipline = disciplines.map(d => {
+    const dr = rows.filter(r=>r.discipline===d)
+    const b = dr.reduce((s,r)=>s+Number(r.budget_amount||0),0)
+    const a = dr.reduce((s,r)=>s+Number(r.actual_spend||0),0)
+    const v = b - a
+    const vp = b>0 ? ((v/b)*100).toFixed(1) : '0.0'
+    return { discipline:d, budget_amount:b, actual_spend:a, variance:v, variance_pct:`${vp}%` }
+  })
+
+  const timeline = dates.map(date => {
+    const dr = rows.filter(r=>r.date===date)
+    const b = dr.reduce((s,r)=>s+Number(r.budget_amount||0),0)
+    const a = dr.reduce((s,r)=>s+Number(r.actual_spend||0),0)
+    return { date, budget_amount:b, actual_spend:a, variance:b-a }
+  })
+
+  const worst = [...byDiscipline].sort((a,b)=>a.variance-b.variance)[0]
+
+  return {
+    kpis: [
+      { id:'total_budget', label:'Total Budget', value: totalBudget.toFixed(0), status:'neutral', subLabel:'Sum of uploaded budget' },
+      { id:'total_spent', label:'Total Spent', value: totalSpent.toFixed(0), status: totalSpent>totalBudget?'warning':'neutral', subLabel:'Actual spend to date' },
+      { id:'cost_variance', label:'Cost Variance', value: variance.toFixed(0), delta: `${variancePct}%`, status, subLabel:'Budget minus spend' },
+      { id:'discipline_count', label:'Disciplines', value: disciplines.length, status:'neutral', subLabel:'Reporting data' },
+    ],
+    visuals: [
+      { id:'timeline', type:'line', title:'Budget vs Spend Over Time', xKey:'date', series:[{key:'budget_amount',name:'Budget',color:'#4B9EFF'},{key:'actual_spend',name:'Spend',color:'#FF6A00'}], data:timeline },
+      { id:'discipline_bar', type:'bar', title:'Budget vs Spend by Discipline', xKey:'discipline', series:[{key:'budget_amount',name:'Budget',color:'#4B9EFF'},{key:'actual_spend',name:'Spend',color:'#FF6A00'}], data:byDiscipline },
+      { id:'cost_table', type:'table', title:'Cost Detail by Discipline', columns:[{key:'discipline',label:'Discipline'},{key:'budget_amount',label:'Budget'},{key:'actual_spend',label:'Spend'},{key:'variance',label:'Variance'},{key:'variance_pct',label:'Variance %'}], data:byDiscipline },
+    ],
+    insights: [
+      `Total spend is ${variance >= 0 ? 'within' : 'over'} budget by ${Math.abs(variance).toFixed(0)} (${Math.abs(Number(variancePct)).toFixed(1)}%).`,
+      worst ? `${worst.discipline} shows the worst variance at ${worst.variance_pct}.` : '',
+      `Data spans ${dates.length} day(s) from ${dates[0]??'N/A'} to ${dates[dates.length-1]??'N/A'}.`,
+    ].filter(Boolean) as string[],
+    meta: { disciplines, dateMin: dates[0]??'', dateMax: dates[dates.length-1]??'' },
+    lastUpdated: now,
+  }
+}
+>>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)

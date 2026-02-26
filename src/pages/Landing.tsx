@@ -1,6 +1,10 @@
 import { useNavigate } from 'react-router-dom'
 import { Users, Wrench, BarChart3, DollarSign, ArrowRight, Eye, Zap, Shield, Clock, Search } from 'lucide-react'
+<<<<<<< HEAD
 import { useState, useRef } from 'react'
+=======
+import { useState, useRef, type KeyboardEvent } from 'react'
+>>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
 import ArgusLogo from '../components/ui/ArgusLogo'
 import Badge from '../components/ui/Badge'
 
@@ -73,7 +77,11 @@ export default function Landing() {
     navigate('/dashboard?module=manpower&q=' + encodeURIComponent(text))
   }
 
+<<<<<<< HEAD
   const handleKey = (e: React.KeyboardEvent) => {
+=======
+  const handleKey = (e: KeyboardEvent) => {
+>>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
     if (e.key === 'Enter' && searchValue.trim()) handleSearch(searchValue.trim())
   }
 

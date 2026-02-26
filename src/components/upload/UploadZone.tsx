@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { useState, useRef, useCallback } from 'react'
+=======
+import { useState, useRef, useCallback, type DragEvent, type ChangeEvent } from 'react'
+>>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, X } from 'lucide-react'
 import { Module, UploadState, DashboardSpec } from '../../types'
 import { supabase, STORAGE_BUCKET } from '../../lib/supabase'
@@ -51,12 +55,20 @@ export default function UploadZone({ module, onSpecLoaded }: Props) {
     }
   }, [module, onSpecLoaded])
 
+<<<<<<< HEAD
   const handleDrop = useCallback((e: React.DragEvent) => {
+=======
+  const handleDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
+>>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
     e.preventDefault(); setIsDragging(false)
     const file = e.dataTransfer.files[0]; if (file) processFile(file)
   }, [processFile])
 
+<<<<<<< HEAD
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+=======
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+>>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
     const file = e.target.files?.[0]; if (file) processFile(file)
   }
 

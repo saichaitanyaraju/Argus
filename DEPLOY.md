@@ -64,8 +64,13 @@ supabase login
 
 supabase link --project-ref YOUR_PROJECT_REF
 # Your project ref is the part after https:// in your project URL
+<<<<<<< HEAD
 # e.g. if URL is https://inobrxqbqtdzxnywecqdb.supabase.co
 # then: supabase link --project-ref inobrxqbqtdzxnywecqdb
+=======
+# e.g. if URL is https://YOUR_PROJECT_REF.supabase.co
+# then: supabase link --project-ref YOUR_PROJECT_REF
+>>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
 ```
 
 ### 2.3 Deploy All Four Functions

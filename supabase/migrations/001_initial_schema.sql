@@ -7,7 +7,11 @@
 -- Uploads table
 CREATE TABLE IF NOT EXISTS uploads (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+<<<<<<< HEAD
   module text NOT NULL CHECK (module IN ('manpower','equipment','progress')),
+=======
+  module text NOT NULL CHECK (module IN ('manpower','equipment','progress','cost')),
+>>>>>>> 89c15af (Fix: cost module, xlsx upload, security + deploy fixes)
   storage_path text NOT NULL,
   original_name text NOT NULL,
   uploaded_at timestamptz DEFAULT now() NOT NULL
