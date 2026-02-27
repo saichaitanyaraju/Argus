@@ -10,10 +10,6 @@ const LYZR_API_ENDPOINT = process.env.LYZR_API_ENDPOINT || 'https://agent-prod.s
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-if (!LYZR_API_KEY || !LYZR_AGENT_ID || !LYZR_USER_ID || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing required server environment variables for agent API');
-}
-
 // Initialize Supabase client with service role for server-side operations
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -163,6 +159,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    if (!LYZR_API_KEY || !LYZR_AGENT_ID || !LYZR_USER_ID || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return res.status(500).json({
+        error: 'Missing required server environment variables for agent API',
+      });
+    }
+
     const {
       projectId,
       projectName,
