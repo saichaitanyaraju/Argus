@@ -23,13 +23,13 @@ git push origin main
 5. Add Environment Variables (in Vercel Dashboard > Project Settings > Environment Variables):
 
 ```
-LYZR_API_KEY=sk-default-N0uuFzNtm7NVzE4BUyDgGrgRxXobr1zC
-LYZR_AGENT_ID=69a0206173b2968d07361460
-LYZR_USER_ID=chaitanyaraju567@gmail.com
+LYZR_API_KEY=your_lyzr_api_key
+LYZR_AGENT_ID=your_lyzr_agent_id
+LYZR_USER_ID=your_email_or_user_id
 LYZR_API_ENDPOINT=https://agent-prod.studio.lyzr.ai/v3/inference/chat/
-NEXT_PUBLIC_SUPABASE_URL=https://ybjscpyxaauwntdxazbt.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlianNjcHl4YWF1d250ZHhhemJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMjAxNTMsImV4cCI6MjA4NzU5NjE1M30.h3UnZh39xEFEA6i8xqearmpHz9ik7LJM64S-0s_T8WE
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlianNjcHl4YWF1d250ZHhhemJ0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjAyMDE1MywiZXhwIjoyMDg3NTk2MTUzfQ.hdmOeeUHJafB-sZQZ6TJ_URd6vJO1Xd4ZcCTC_xrDHw
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
 6. Click "Deploy"
@@ -69,17 +69,17 @@ Create `.env.local` in the project root:
 
 ```env
 # Lyzr AI Agent
-LYZR_API_KEY=sk-default-N0uuFzNtm7NVzE4BUyDgGrgRxXobr1zC
-LYZR_AGENT_ID=69a0206173b2968d07361460
-LYZR_USER_ID=chaitanyaraju567@gmail.com
+LYZR_API_KEY=your_lyzr_api_key
+LYZR_AGENT_ID=your_lyzr_agent_id
+LYZR_USER_ID=your_email_or_user_id
 LYZR_API_ENDPOINT=https://agent-prod.studio.lyzr.ai/v3/inference/chat/
 
 # Supabase (Client-side)
-VITE_SUPABASE_URL=https://ybjscpyxaauwntdxazbt.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlianNjcHl4YWF1d250ZHhhemJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMjAxNTMsImV4cCI6MjA4NzU5NjE1M30.h3UnZh39xEFEA6i8xqearmpHz9ik7LJM64S-0s_T8WE
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 # Supabase (Server-side only)
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlianNjcHl4YWF1d250ZHhhemJ0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjAyMDE1MywiZXhwIjoyMDg3NTk2MTUzfQ.hdmOeeUHJafB-sZQZ6TJ_URd6vJO1Xd4ZcCTC_xrDHw
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
 ## Features Implemented

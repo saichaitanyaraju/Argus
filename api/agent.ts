@@ -2,13 +2,17 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
 // Environment variables
-const LYZR_API_KEY = process.env.LYZR_API_KEY || 'sk-default-N0uuFzNtm7NVzE4BUyDgGrgRxXobr1zC';
-const LYZR_AGENT_ID = process.env.LYZR_AGENT_ID || '69a0206173b2968d07361460';
-const LYZR_USER_ID = process.env.LYZR_USER_ID || 'chaitanyaraju567@gmail.com';
+const LYZR_API_KEY = process.env.LYZR_API_KEY || '';
+const LYZR_AGENT_ID = process.env.LYZR_AGENT_ID || '';
+const LYZR_USER_ID = process.env.LYZR_USER_ID || '';
 const LYZR_API_ENDPOINT = process.env.LYZR_API_ENDPOINT || 'https://agent-prod.studio.lyzr.ai/v3/inference/chat/';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+if (!LYZR_API_KEY || !LYZR_AGENT_ID || !LYZR_USER_ID || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error('Missing required server environment variables for agent API');
+}
 
 // Initialize Supabase client with service role for server-side operations
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);

@@ -31,10 +31,17 @@ export async function askLyzrAgent(args: AskLyzrAgentArgs): Promise<LyzrAgentRes
     sessionId,
   } = args;
 
-  const apiKey = import.meta.env.LYZR_API_KEY || 'sk-default-N0uuFzNtm7NVzE4BUyDgGrgRxXobr1zC';
-  const agentId = import.meta.env.LYZR_AGENT_ID || '69a0206173b2968d07361460';
-  const userId = import.meta.env.LYZR_USER_ID || 'chaitanyaraju567@gmail.com';
-  const endpoint = import.meta.env.LYZR_API_ENDPOINT || 'https://agent-prod.studio.lyzr.ai/v3/inference/chat/';
+  const apiKey = import.meta.env.VITE_LYZR_API_KEY || import.meta.env.LYZR_API_KEY || '';
+  const agentId = import.meta.env.VITE_LYZR_AGENT_ID || import.meta.env.LYZR_AGENT_ID || '';
+  const userId = import.meta.env.VITE_LYZR_USER_ID || import.meta.env.LYZR_USER_ID || '';
+  const endpoint =
+    import.meta.env.VITE_LYZR_API_ENDPOINT ||
+    import.meta.env.LYZR_API_ENDPOINT ||
+    'https://agent-prod.studio.lyzr.ai/v3/inference/chat/';
+
+  if (!apiKey || !agentId || !userId) {
+    throw new Error('Missing Lyzr configuration. Set VITE_LYZR_API_KEY, VITE_LYZR_AGENT_ID, and VITE_LYZR_USER_ID.');
+  }
 
   const res = await fetch(endpoint, {
     method: 'POST',

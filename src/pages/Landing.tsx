@@ -207,17 +207,3 @@ export default function Landing() {
     </div>
   );
 }
-
-                  className="flex items-center gap-3 w-full px-4 py-3 text-sm text-white/50 hover:bg-accent/5 hover:text-white/85 transition-colors border-b border-white/4 last:border-none text-left"
-                >
-                  <span className="text-base">{s.icon}</span>
-                  {s.text}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </main>
-    </div>
-  )
-}
