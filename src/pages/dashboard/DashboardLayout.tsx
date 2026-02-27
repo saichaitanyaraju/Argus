@@ -44,7 +44,7 @@ const MODULE_CONFIG: Record<Module, { label: string; icon: typeof Users; color: 
 interface DashboardLayoutProps {
   module: Module;
   label: string;
-  icon: ComponentType<{ size?: number; className?: string }>;
+  icon: ComponentType<{ size?: string | number; className?: string }>;
   iconColor: string;
 }
 
