@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    },
+    {
+      "src": "api/**/*.ts",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/[^.]+",
+      "dest": "/index.html"
+    }
+  ],
+  "env": {
+    "LYZR_API_KEY": "sk-default-N0uuFzNtm7NVzE4BUyDgGrgRxXobr1zC",
+    "LYZR_AGENT_ID": "69a0206173b2968d07361460",
+    "LYZR_USER_ID": "chaitanyaraju567@gmail.com",
+    "LYZR_API_ENDPOINT": "https://agent-prod.studio.lyzr.ai/v3/inference/chat/",
+    "NEXT_PUBLIC_SUPABASE_URL": "https://ybjscpyxaauwntdxazbt.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlianNjcHl4YWF1d250ZHhhemJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMjAxNTMsImV4cCI6MjA4NzU5NjE1M30.h3UnZh39xEFEA6i8xqearmpHz9ik7LJM64S-0s_T8WE",
+    "SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlianNjcHl4YWF1d250ZHhhemJ0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjAyMDE1MywiZXhwIjoyMDg3NTk2MTUzfQ.hdmOeeUHJafB-sZQZ6TJ_URd6vJO1Xd4ZcCTC_xrDHw"
+  }
+}
