@@ -8,7 +8,6 @@
 
 Argus is a **Project Visibility Copilot** for construction and oil & gas projects. Upload site Excel files, get instant dashboards and KPIs, and ask AI-powered questions about your project data.
 
-![Argus Screenshot](https://argus-live.vercel.app/screenshot.png)
 
 ## Features
 
