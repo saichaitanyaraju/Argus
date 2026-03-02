@@ -2,11 +2,16 @@ import { useState, useRef, useCallback, type DragEvent, type ChangeEvent } from 
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, X, Lock } from 'lucide-react';
 import { Module, UploadState, DashboardSpec } from '../../types';
 import { buildDashboardSpec } from '../../lib/specBuilders';
+import { preprocessUploadRows, type UploadProfile } from '../../lib/uploadPreprocess';
 import { toIsoDate } from '../../utils/dateParser';
 
 interface Props {
   module: Module;
-  onSpecLoaded: (payload: { spec: DashboardSpec; recordsSample: Record<string, unknown>[] }) => void;
+  onSpecLoaded: (payload: {
+    spec: DashboardSpec;
+    recordsSample: Record<string, unknown>[];
+    analysisProfile?: UploadProfile;
+  }) => void;
   readOnly?: boolean;
 }
 
@@ -351,10 +356,20 @@ export default function UploadZone({ module, onSpecLoaded, readOnly = false }: P
 
         setState({ status: 'processing', fileName: `${file.name} - ${best.sheetName}` });
 
-        const spec = buildDashboardSpec(module, best.mappedRows);
+        const preprocess = await preprocessUploadRows({
+          module,
+          rows: best.mappedRows,
+          fileName: file.name,
+        });
+
+        const normalizedRows =
+          preprocess.normalizedRows.length > 0 ? preprocess.normalizedRows : best.mappedRows;
+
+        const spec = buildDashboardSpec(module, normalizedRows);
         onSpecLoaded({
           spec,
-          recordsSample: best.mappedRows.slice(0, 20),
+          recordsSample: normalizedRows.slice(0, 20),
+          analysisProfile: preprocess.profile,
         });
 
         setState({ status: 'done', fileName: `${file.name} - ${best.sheetName}` });

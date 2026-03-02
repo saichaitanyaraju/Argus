@@ -8,6 +8,7 @@ import ManpowerDashboard from './pages/dashboard/ManpowerDashboard';
 import EquipmentDashboard from './pages/dashboard/EquipmentDashboard';
 import ProgressDashboard from './pages/dashboard/ProgressDashboard';
 import CostDashboard from './pages/dashboard/CostDashboard';
+import UploadAnalysisPage from './pages/UploadAnalysisPage';
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
             <Route path="/dashboard/equipment" element={<EquipmentDashboard />} />
             <Route path="/dashboard/progress" element={<ProgressDashboard />} />
             <Route path="/dashboard/cost" element={<CostDashboard />} />
+            <Route path="/analysis/:module" element={<UploadAnalysisPage />} />
           </Routes>
         </DashboardDataProvider>
       </ToastProvider>

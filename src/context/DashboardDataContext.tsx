@@ -20,6 +20,7 @@ export interface ModuleDataEntry {
   source: ModuleDataSource;
   loadedAt: string;
   recordsSample: Record<string, unknown>[];
+  analysisProfile?: Record<string, unknown>;
 }
 
 type ProjectModuleData = Partial<Record<Module, ModuleDataEntry>>;
@@ -31,6 +32,7 @@ interface SetModuleDataArgs {
   source: ModuleDataSource;
   loadedAt?: string;
   recordsSample?: Record<string, unknown>[];
+  analysisProfile?: Record<string, unknown>;
 }
 
 interface DashboardDataContextType {
@@ -169,6 +171,7 @@ export function DashboardDataProvider({ children }: DashboardDataProviderProps) 
           source: args.source,
           loadedAt: args.loadedAt || new Date().toISOString(),
           recordsSample: (args.recordsSample || extractRecordsSampleFromSpec(args.spec)).slice(0, 20),
+          analysisProfile: args.analysisProfile,
         };
 
         const nextProjectData: ProjectModuleData = {

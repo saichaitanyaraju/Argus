@@ -35,6 +35,7 @@ import { usePublicMode } from '../../hooks/usePublicMode';
 import { hasDashboardData } from '../../utils/dashboardData';
 import { toIsoDate } from '../../utils/dateParser';
 import Skeleton from '../../components/ui/Skeleton';
+import type { UploadProfile } from '../../lib/uploadPreprocess';
 
 const MODULE_CONFIG: Record<Module, { label: string; icon: typeof Users; color: string }> = {
   manpower: { label: 'Manpower', icon: Users, color: 'text-blue-400' },
@@ -183,6 +184,7 @@ export default function DashboardLayout({ module, label }: DashboardLayoutProps)
   const handleSpecLoaded = (payload: {
     spec: DashboardSpec;
     recordsSample: Record<string, unknown>[];
+    analysisProfile?: UploadProfile;
   }) => {
     if (!projectId) {
       pushToast('No project selected.', 'warning');
@@ -195,11 +197,13 @@ export default function DashboardLayout({ module, label }: DashboardLayoutProps)
         spec: payload.spec,
         source: 'upload',
         recordsSample: payload.recordsSample,
+        analysisProfile: payload.analysisProfile,
       },
       projectId
     );
 
-    pushToast(`${label} data loaded.`, 'success');
+    pushToast(`${label} data loaded and normalized.`, 'success');
+    navigate(`/analysis/${module}`);
   };
 
   const handleLoadDemo = () => {
