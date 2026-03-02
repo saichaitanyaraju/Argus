@@ -49,7 +49,6 @@ export default function OverviewDashboard() {
     hasModuleData,
     setModuleData,
     loadDemoModule,
-    loadAllDemoModules,
   } = useDashboardData();
 
   const [chatOpen, setChatOpen] = useState(false);
@@ -57,6 +56,7 @@ export default function OverviewDashboard() {
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [chatError, setChatError] = useState('');
+  const [chatOfflineMode, setChatOfflineMode] = useState(false);
   const [lastFailedMessage, setLastFailedMessage] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sessionId] = useState(() => `session-${Date.now()}`);
@@ -142,7 +142,9 @@ export default function OverviewDashboard() {
       return;
     }
 
-    loadAllDemoModules(projectId);
+    loadDemoModule('manpower', projectId);
+    loadDemoModule('equipment', projectId);
+    loadDemoModule('progress', projectId);
     loadDemoModule('cost', projectId);
     pushToast('All demo data loaded.', 'success');
     window.setTimeout(() => {
@@ -243,6 +245,7 @@ export default function OverviewDashboard() {
     });
 
     if (response.ok) {
+      setChatOfflineMode(Boolean(response.offlineMode));
       const assistantMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -250,8 +253,15 @@ export default function OverviewDashboard() {
         timestamp: new Date(),
       };
       setChatMessages((prev) => [...prev, assistantMsg]);
-      setLastFailedMessage('');
+      if (response.offlineMode) {
+        setChatError('AI service unavailable. Showing offline answer.');
+        setLastFailedMessage(text);
+      } else {
+        setChatError('');
+        setLastFailedMessage('');
+      }
     } else {
+      setChatOfflineMode(false);
       setLastFailedMessage(text);
       setChatError(response.message);
       const assistantMsg: ChatMessage = {
@@ -272,25 +282,31 @@ export default function OverviewDashboard() {
   };
 
   const aggregateKpis = (): KPI[] => {
-    const kpis: KPI[] = [];
+    const targetKpiByModule: Record<Module, string> = {
+      manpower: 'variance_pct',
+      equipment: 'breakdown_count',
+      progress: 'slippage_pct',
+      cost: 'total_budget',
+    };
 
-    modules.forEach((module) => {
-      const spec = specs[module];
-      if (!spec) return;
+    return modules
+      .map((module) => {
+        const spec = specs[module];
+        if (!spec) return null;
 
-      const config = MODULE_CONFIG[module];
-      const criticalKpi = spec.kpis.find((kpi) => kpi.status === 'danger') || spec.kpis[0];
+        const config = MODULE_CONFIG[module];
+        const preferred = spec.kpis.find((kpi) => kpi.id === targetKpiByModule[module]);
+        const fallback = spec.kpis.find((kpi) => kpi.status === 'danger') || spec.kpis[0];
+        const selected = preferred || fallback;
+        if (!selected) return null;
 
-      if (criticalKpi) {
-        kpis.push({
-          ...criticalKpi,
-          id: `${module}_${criticalKpi.id}`,
-          label: `${config.label}: ${criticalKpi.label}`,
-        });
-      }
-    });
-
-    return kpis.slice(0, 4);
+        return {
+          ...selected,
+          id: `${module}_${selected.id}`,
+          label: `${config.label}: ${selected.label}`,
+        } satisfies KPI;
+      })
+      .filter((item): item is KPI => Boolean(item));
   };
 
   const health = computeHealthScore(specs);
@@ -324,7 +340,7 @@ export default function OverviewDashboard() {
           <div className="flex items-center gap-2">
             <LayoutDashboard size={18} className="text-[#FF6A00]" />
             <span className="text-sm font-display font-semibold text-white">Project Overview</span>
-            {project && <span className="text-xs text-white/40">· {project.name}</span>}
+            {project && <span className="text-xs text-white/40">- {project.name}</span>}
           </div>
         </div>
 
@@ -587,6 +603,9 @@ export default function OverviewDashboard() {
               <div>
                 <p className="text-sm font-display font-semibold text-white">Argus Agent</p>
                 <p className="text-xs text-white/30 font-mono">powered by open-source LLM</p>
+                {chatOfflineMode && (
+                  <p className="text-[10px] text-amber-300/80 font-mono mt-0.5">(Offline mode)</p>
+                )}
               </div>
             </div>
             <button

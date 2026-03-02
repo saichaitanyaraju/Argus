@@ -47,7 +47,7 @@ interface DashboardDataContextType {
 const STORAGE_KEY_PREFIX = 'argus.moduleData.';
 const MODULES: Module[] = ['manpower', 'equipment', 'progress', 'cost'];
 const COST_DEFAULT_START = '2024-01-08';
-const COST_DEFAULT_END = '2024-12-01';
+const COST_DEFAULT_END = '2024-01-12';
 
 const DashboardDataContext = createContext<DashboardDataContextType | undefined>(undefined);
 
@@ -65,6 +65,25 @@ function isValidModuleDataEntry(value: unknown): value is ModuleDataEntry {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as ModuleDataEntry;
   return Boolean(candidate.spec && candidate.source && candidate.loadedAt);
+}
+
+function cloneSpec(spec: DashboardSpec): DashboardSpec {
+  return {
+    ...spec,
+    kpis: spec.kpis.map((kpi) => ({ ...kpi })),
+    visuals: spec.visuals.map((visual) => ({
+      ...visual,
+      series: visual.series?.map((item) => ({ ...item })),
+      data: visual.data?.map((row) => ({ ...row })),
+      columns: visual.columns?.map((column) => ({ ...column })),
+    })),
+    insights: [...spec.insights],
+    meta: {
+      ...spec.meta,
+      disciplines: [...spec.meta.disciplines],
+    },
+    lastUpdated: new Date().toISOString(),
+  };
 }
 
 function withCostDateFallback(module: Module, spec: DashboardSpec): DashboardSpec {
@@ -171,14 +190,15 @@ export function DashboardDataProvider({ children }: DashboardDataProviderProps) 
     (module: Module, forProjectId?: string | null) => {
       const spec = getDemoSpec(module);
       if (!spec) return;
+      const normalizedSpec = cloneSpec(spec);
 
       setModuleData(
         {
           module,
-          spec,
+          spec: normalizedSpec,
           source: 'demo',
           loadedAt: new Date().toISOString(),
-          recordsSample: extractRecordsSampleFromSpec(spec),
+          recordsSample: extractRecordsSampleFromSpec(normalizedSpec),
         },
         forProjectId
       );
@@ -188,9 +208,10 @@ export function DashboardDataProvider({ children }: DashboardDataProviderProps) 
 
   const loadAllDemoModules = useCallback(
     (forProjectId?: string | null) => {
-      MODULES.forEach((module) => {
-        loadDemoModule(module, forProjectId);
-      });
+      loadDemoModule('manpower', forProjectId);
+      loadDemoModule('equipment', forProjectId);
+      loadDemoModule('progress', forProjectId);
+      loadDemoModule('cost', forProjectId);
     },
     [loadDemoModule]
   );

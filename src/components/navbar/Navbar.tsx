@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Eye,
@@ -64,7 +64,10 @@ export default function Navbar({ variant = 'landing' }: NavbarProps) {
   );
 
   const handleCreateProject = useCallback(async () => {
-    if (!newProjectName.trim()) {
+    const trimmedName = newProjectName.trim();
+    const trimmedCode = newProjectCode.trim();
+
+    if (!trimmedName) {
       setCreateError('Project name is required.');
       return;
     }
@@ -72,8 +75,8 @@ export default function Navbar({ variant = 'landing' }: NavbarProps) {
     setCreateError('');
     setIsCreatingProject(true);
     const created = await createProject({
-      name: newProjectName,
-      code: newProjectCode || undefined,
+      name: trimmedName,
+      code: trimmedCode || undefined,
     });
     setIsCreatingProject(false);
 
@@ -268,7 +271,7 @@ export default function Navbar({ variant = 'landing' }: NavbarProps) {
                   placeholder="e.g. West Yard Expansion"
                   className="w-full px-3 py-2 rounded-xl bg-[#0f1117] border border-white/10 text-white/80 placeholder-white/30 outline-none focus:border-[#FF6A00]/40"
                 />
-                {createError && <p className="text-red-400 text-sm mt-1">{createError}</p>}
+                {createError && <p className="text-red-400 text-sm mt-1 ml-1">{createError}</p>}
               </div>
               <div>
                 <label className="block text-xs text-white/50 mb-1">Project Code (optional)</label>
@@ -290,8 +293,12 @@ export default function Navbar({ variant = 'landing' }: NavbarProps) {
               </button>
               <button
                 onClick={() => void handleCreateProject()}
-                disabled={isCreatingProject || !newProjectName.trim()}
-                className="px-3 py-2 rounded-xl bg-[#FF6A00] hover:bg-[#FF8C38] text-white disabled:opacity-50"
+                disabled={isCreatingProject}
+                className={`px-3 py-2 rounded-xl text-white ${
+                  isCreatingProject || !newProjectName.trim()
+                    ? 'bg-[#FF6A00]/70 opacity-40 cursor-not-allowed'
+                    : 'bg-[#FF6A00] hover:bg-[#FF8C38]'
+                }`}
               >
                 {isCreatingProject ? 'Creating...' : 'Create Project'}
               </button>

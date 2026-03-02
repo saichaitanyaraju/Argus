@@ -41,6 +41,13 @@ function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
+function buildDateSpanInsight(dates: string[], dateMin: string, dateMax: string): string {
+  if (!dates.length || !dateMin || !dateMax) {
+    return 'Date range is unavailable in the current dataset.';
+  }
+  return `Data spans ${dates.length} day(s) from ${dateMin} to ${dateMax}.`;
+}
+
 function buildEmptySpec(module: Module): DashboardSpec {
   return {
     kpis: [],
@@ -187,7 +194,7 @@ function buildManpowerSpec(rows: AnyRow[]): DashboardSpec {
       worst
         ? `${worst.discipline} has the largest staffing variance at ${worst.variance_pct}.`
         : 'Discipline variance is balanced.',
-      `Data spans ${dates.length} day(s) from ${dateBounds.dateMin || 'N/A'} to ${dateBounds.dateMax || 'N/A'}.`,
+      buildDateSpanInsight(dates, dateBounds.dateMin, dateBounds.dateMax),
     ],
     meta: {
       disciplines,
@@ -333,7 +340,7 @@ function buildEquipmentSpec(rows: AnyRow[]): DashboardSpec {
       worstDiscipline
         ? `${worstDiscipline.discipline} has the highest breakdown count (${worstDiscipline.Breakdown}).`
         : 'Breakdown risk is low across all disciplines.',
-      `Data spans ${dates.length} day(s) from ${dateBounds.dateMin || 'N/A'} to ${dateBounds.dateMax || 'N/A'}.`,
+      buildDateSpanInsight(dates, dateBounds.dateMin, dateBounds.dateMax),
     ],
     meta: {
       disciplines,
@@ -486,7 +493,7 @@ function buildProgressSpec(rows: AnyRow[]): DashboardSpec {
       worst
         ? `${worst.discipline} has the largest delay at ${worst.slippage}.`
         : 'No critical discipline delays detected.',
-      `Data spans ${dates.length} day(s) from ${dateBounds.dateMin || 'N/A'} to ${dateBounds.dateMax || 'N/A'}.`,
+      buildDateSpanInsight(dates, dateBounds.dateMin, dateBounds.dateMax),
     ],
     meta: {
       disciplines,
@@ -640,7 +647,7 @@ function buildCostSpec(rows: AnyRow[]): DashboardSpec {
     insights: [
       `Total spend is ${variance >= 0 ? 'within' : 'over'} budget by ${Math.abs(variance).toFixed(2)} (${Math.abs(variancePct).toFixed(1)}%).`,
       worst ? `${worst.discipline} has the largest variance at ${worst.variance_pct}.` : 'No discipline variance detected.',
-      `Data spans ${dates.length} day(s) from ${dateBounds.dateMin || 'N/A'} to ${dateBounds.dateMax || 'N/A'}.`,
+      buildDateSpanInsight(dates, dateBounds.dateMin, dateBounds.dateMax),
     ],
     meta: {
       disciplines,

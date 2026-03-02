@@ -1,4 +1,5 @@
-import { DashboardSpec } from '../types'
+import type { DashboardSpec } from '../types'
+import { buildDashboardSpec } from './specBuilders'
 
 export const DEMO_MANPOWER_SPEC: DashboardSpec = {
   kpis: [
@@ -59,10 +60,10 @@ export const DEMO_MANPOWER_SPEC: DashboardSpec = {
   insights: [
     'Structural discipline is critically understaffed at -20% vs planned. Immediate action required.',
     'Mechanical discipline is closest to target (-6.5%), suggesting good crew availability.',
-    'Overall workforce is 10.9% below planned — consider escalating to subcontractor leads.',
-    'Headcount has declined from peak of 215 on Jan 10 — investigate root cause.',
+    'Overall workforce is 10.9% below planned - consider escalating to subcontractor leads.',
+    'Headcount has declined from peak of 215 on Jan 10 - investigate root cause.',
   ],
-  meta: { disciplines: ['Civil', 'Mechanical', 'Electrical', 'Structural', 'Piping', 'Instrumentation'], dateMin: '2024-01-08', dateMax: '2024-12-01' },
+  meta: { disciplines: ['Civil', 'Mechanical', 'Electrical', 'Structural', 'Piping', 'Instrumentation'], dateMin: '2024-01-08', dateMax: '2024-01-12' },
   lastUpdated: new Date().toISOString(),
 }
 
@@ -122,7 +123,7 @@ export const DEMO_EQUIPMENT_SPEC: DashboardSpec = {
     },
   ],
   insights: [
-    '5 equipment units in Breakdown status — EQ-009 (Mechanical) has been idle 14 hours.',
+    '5 equipment units in Breakdown status - EQ-009 (Mechanical) has been idle 14 hours.',
     'Utilization rate of 66.2% is below the 71.3% target. Review idle equipment deployment.',
     'Electrical discipline has highest idle ratio (4 idle out of 11 total).',
     'Civil and Structural are performing closest to optimal utilization.',
@@ -188,81 +189,31 @@ export const DEMO_PROGRESS_SPEC: DashboardSpec = {
     },
   ],
   insights: [
-    'Piping (-7%) and Electrical (-8%) are the most behind schedule — prioritize resource allocation.',
-    'Instrumentation is ahead of schedule (+2%) — a rare bright spot this period.',
+    'Piping (-7%) and Electrical (-8%) are the most behind schedule - prioritize resource allocation.',
+    'Instrumentation is ahead of schedule (+2%) - a rare bright spot this period.',
     'Structural is nearly on track (-1%) and may be able to release resources to critical path items.',
-    'Overall slippage has grown from -2% to -5.6% in 5 days — trajectory must be reversed.',
+    'Overall slippage has grown from -2% to -5.6% in 5 days - trajectory must be reversed.',
   ],
   meta: { disciplines: ['Civil', 'Mechanical', 'Electrical', 'Structural', 'Piping', 'Instrumentation'], dateMin: '2024-01-08', dateMax: '2024-01-12' },
   lastUpdated: new Date().toISOString(),
 }
 
-export const DEMO_COST_SPEC: DashboardSpec = {
-  kpis: [
-    { id: 'total_budget', label: 'Total Budget', value: '$4.2M', status: 'neutral', subLabel: 'Approved project budget' },
-    { id: 'spent_to_date', label: 'Spent to Date', value: '$2.91M', delta: '+$210K this week', status: 'warning', subLabel: '69.3% of budget' },
-    { id: 'cost_variance', label: 'Cost Variance', value: '-$340K', delta: '-8.1% over budget', status: 'danger', subLabel: 'vs. planned spend' },
-    { id: 'forecast_at_completion', label: 'Forecast at Completion', value: '$4.54M', delta: '+$340K over budget', status: 'danger', subLabel: 'Projected final cost' },
-  ],
-  visuals: [
-    {
-      id: 'cost_timeline', type: 'line', title: 'Budget vs Actual Spend Over Time ($K)', xKey: 'date',
-      series: [
-        { key: 'planned_spend', name: 'Planned Spend ($K)', color: '#4B9EFF' },
-        { key: 'actual_spend', name: 'Actual Spend ($K)', color: '#FF6A00' },
-      ],
-      data: [
-        { date: '2024-01-08', planned_spend: 2420, actual_spend: 2580 },
-        { date: '2024-01-09', planned_spend: 2520, actual_spend: 2680 },
-        { date: '2024-01-10', planned_spend: 2610, actual_spend: 2760 },
-        { date: '2024-01-11', planned_spend: 2700, actual_spend: 2840 },
-        { date: '2024-01-12', planned_spend: 2570, actual_spend: 2910 },
-      ],
-    },
-    {
-      id: 'cost_by_discipline', type: 'bar', title: 'Budget vs Spent by Discipline ($K)', xKey: 'discipline',
-      series: [
-        { key: 'budget', name: 'Budget ($K)', color: '#4B9EFF' },
-        { key: 'spent', name: 'Spent ($K)', color: '#FF6A00' },
-      ],
-      data: [
-        { discipline: 'Civil', budget: 820, spent: 890 },
-        { discipline: 'Mechanical', budget: 1050, spent: 1140 },
-        { discipline: 'Electrical', budget: 760, spent: 820 },
-        { discipline: 'Structural', budget: 680, spent: 660 },
-        { discipline: 'Piping', budget: 540, spent: 580 },
-        { discipline: 'Instrumentation', budget: 350, spent: 320 },
-      ],
-    },
-    {
-      id: 'cost_table', type: 'table', title: 'Cost Breakdown by Discipline',
-      columns: [
-        { key: 'discipline', label: 'Discipline' },
-        { key: 'budget', label: 'Budget ($K)' },
-        { key: 'spent', label: 'Spent ($K)' },
-        { key: 'variance', label: 'Variance ($K)' },
-        { key: 'variance_pct', label: 'Variance %' },
-        { key: 'status', label: 'Status' },
-      ],
-      data: [
-        { discipline: 'Civil', budget: '820', spent: '890', variance: '+70', variance_pct: '+8.5%', status: 'Over Budget' },
-        { discipline: 'Mechanical', budget: '1,050', spent: '1,140', variance: '+90', variance_pct: '+8.6%', status: 'Over Budget' },
-        { discipline: 'Electrical', budget: '760', spent: '820', variance: '+60', variance_pct: '+7.9%', status: 'Over Budget' },
-        { discipline: 'Structural', budget: '680', spent: '660', variance: '-20', variance_pct: '-2.9%', status: 'Under Budget' },
-        { discipline: 'Piping', budget: '540', spent: '580', variance: '+40', variance_pct: '+7.4%', status: 'Over Budget' },
-        { discipline: 'Instrumentation', budget: '350', spent: '320', variance: '-30', variance_pct: '-8.6%', status: 'Under Budget' },
-      ],
-    },
-  ],
-  insights: [
-    'Overall project is $340K (8.1%) over the planned spend-to-date — forecast at completion exceeds budget.',
-    'Mechanical is the largest cost overrun at +$90K (+8.6%) — review subcontractor billing and scope creep.',
-    'Structural and Instrumentation are under budget — may offset risk if trends continue.',
-    'At the current burn rate of $210K/week, remaining budget will be exhausted in ~6.2 weeks.',
-  ],
-  meta: { disciplines: ['Civil', 'Mechanical', 'Electrical', 'Structural', 'Piping', 'Instrumentation'], dateMin: '2024-01-08', dateMax: '2024-01-12' },
-  lastUpdated: new Date().toISOString(),
-}
+export const COST_DEMO_DATA: Array<Record<string, unknown>> = [
+  { date: '2024-01-08', discipline: 'Civil', budget_amount: 500000, actual_amount: 420000 },
+  { date: '2024-01-08', discipline: 'Mechanical', budget_amount: 750000, actual_amount: 710000 },
+  { date: '2024-01-08', discipline: 'Electrical', budget_amount: 620000, actual_amount: 580000 },
+  { date: '2024-01-08', discipline: 'Structural', budget_amount: 480000, actual_amount: 310000 },
+  { date: '2024-01-08', discipline: 'Piping', budget_amount: 390000, actual_amount: 365000 },
+  { date: '2024-01-08', discipline: 'Instrumentation', budget_amount: 290000, actual_amount: 275000 },
+  { date: '2024-01-09', discipline: 'Civil', budget_amount: 500000, actual_amount: 435000 },
+  { date: '2024-01-09', discipline: 'Mechanical', budget_amount: 750000, actual_amount: 725000 },
+  { date: '2024-01-10', discipline: 'Civil', budget_amount: 500000, actual_amount: 448000 },
+  { date: '2024-01-10', discipline: 'Mechanical', budget_amount: 750000, actual_amount: 740000 },
+  { date: '2024-01-11', discipline: 'Civil', budget_amount: 500000, actual_amount: 461000 },
+  { date: '2024-01-12', discipline: 'Civil', budget_amount: 500000, actual_amount: 472000 },
+]
+
+export const DEMO_COST_SPEC: DashboardSpec = buildDashboardSpec('cost', COST_DEMO_DATA)
 
 export function getDemoSpec(module: string): DashboardSpec | null {
   if (module === 'manpower') return DEMO_MANPOWER_SPEC

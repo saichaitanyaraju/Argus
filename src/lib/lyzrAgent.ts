@@ -54,30 +54,48 @@ export class AgentProxyError extends Error {
 }
 
 export async function askAgent(args: AskAgentArgs): Promise<AgentResponse> {
-  const res = await fetch('/api/agent', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      mode: 'ask',
-      ...args,
-    }),
-  });
+  try {
+    const res = await fetch('/api/agent', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        mode: 'ask',
+        ...args,
+      }),
+    });
 
-  const payload = (await res.json().catch(() => ({}))) as AgentResponse & AgentApiErrorPayload;
-  if (!res.ok || !payload.answer) {
-    throw new AgentProxyError(
-      payload.error || 'Failed to connect to AI service.',
-      payload.errorCode || 'UPSTREAM_ERROR',
-      res.status
-    );
+    const payload = (await res.json().catch(() => ({}))) as AgentResponse & AgentApiErrorPayload;
+    if (!res.ok || !payload.answer) {
+      console.error('[ArgusAI] Error:', {
+        status: res.status,
+        errorCode: payload.errorCode || 'UPSTREAM_ERROR',
+        error: payload.error || 'Failed to connect to AI service.',
+        payload,
+      });
+
+      throw new AgentProxyError(
+        payload.error || 'Failed to connect to AI service.',
+        payload.errorCode || 'UPSTREAM_ERROR',
+        res.status
+      );
+    }
+
+    return {
+      answer: payload.answer,
+      raw: payload.raw,
+    };
+  } catch (error) {
+    if (!(error instanceof AgentProxyError)) {
+      console.error('[ArgusAI] Error:', {
+        status: undefined,
+        errorCode: 'SERVICE_UNAVAILABLE',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+    throw error;
   }
-
-  return {
-    answer: payload.answer,
-    raw: payload.raw,
-  };
 }
 
 export const askLyzrAgent = askAgent;
