@@ -1,8 +1,8 @@
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string;
   readonly VITE_SUPABASE_ANON_KEY: string;
-  readonly VITE_LYZR_API_KEY?: string;
-  readonly VITE_LYZR_AGENT_ID?: string;
+  readonly VITE_OPENAI_COMPAT_API_KEY?: string;
+  readonly VITE_GROQ_API_KEY?: string;
 }
 
 interface ImportMeta {

@@ -1,10 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const LYZR_API_KEY = process.env.LYZR_API_KEY || '';
-const LYZR_AGENT_ID = process.env.LYZR_AGENT_ID || '';
-const LYZR_USER_ID = process.env.LYZR_USER_ID || 'argus-system';
-const LYZR_API_ENDPOINT =
-  process.env.LYZR_API_ENDPOINT || 'https://agent-prod.studio.lyzr.ai/v3/inference/chat/';
+const OPENAI_COMPAT_API_KEY = process.env.OPENAI_COMPAT_API_KEY || process.env.GROQ_API_KEY || '';
+const OPENAI_COMPAT_BASE_URL = (
+  process.env.OPENAI_COMPAT_BASE_URL ||
+  process.env.GROQ_API_BASE_URL ||
+  'https://api.groq.com/openai/v1'
+).replace(/\/+$/, '');
+const OPENAI_COMPAT_MODEL =
+  process.env.OPENAI_COMPAT_MODEL || process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+const OPENAI_COMPAT_ENDPOINT = `${OPENAI_COMPAT_BASE_URL}/chat/completions`;
 
 const TIMEOUT_MS = 8000;
 
@@ -15,7 +19,7 @@ function setCorsHeaders(res: VercelResponse): void {
 }
 
 function hasConfig(): boolean {
-  return Boolean(LYZR_API_KEY && LYZR_AGENT_ID && LYZR_API_ENDPOINT);
+  return Boolean(OPENAI_COMPAT_API_KEY && OPENAI_COMPAT_ENDPOINT && OPENAI_COMPAT_MODEL);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -37,17 +41,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const upstream = await fetch(LYZR_API_ENDPOINT, {
+    const upstream = await fetch(OPENAI_COMPAT_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': LYZR_API_KEY,
+        Authorization: `Bearer ${OPENAI_COMPAT_API_KEY}`,
       },
       body: JSON.stringify({
-        user_id: LYZR_USER_ID,
-        agent_id: LYZR_AGENT_ID,
-        session_id: `health-${Date.now()}`,
-        message: 'Return exactly: OK',
+        model: OPENAI_COMPAT_MODEL,
+        temperature: 0,
+        max_tokens: 8,
+        messages: [
+          { role: 'system', content: 'Respond in one token.' },
+          { role: 'user', content: 'Reply with OK' },
+        ],
       }),
       signal: controller.signal,
     });
@@ -66,3 +73,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     clearTimeout(timeout);
   }
 }
+

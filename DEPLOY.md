@@ -6,45 +6,33 @@
 
 ```bash
 git add .
-git commit -m "feat: complete Argus implementation with Lyzr AI integration"
+git commit -m "feat: switch AI to open-source LLM backend"
 git push origin main
 ```
 
 ### 2. Deploy on Vercel
 
-1. Go to [vercel.com](https://vercel.com) and sign in
-2. Click "Add New Project"
-3. Import your GitHub repository: `saichaitanyaraju/Argus`
+1. Go to https://vercel.com and sign in.
+2. Click "Add New Project".
+3. Import your GitHub repository: `saichaitanyaraju/Argus`.
 4. Configure:
-   - **Framework Preset**: Vite
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
+   - Framework Preset: Vite
+   - Build Command: `npm run build`
+   - Output Directory: `dist`
+5. Add Environment Variables (Project Settings > Environment Variables):
 
-5. Add Environment Variables (in Vercel Dashboard > Project Settings > Environment Variables):
+```env
+# Open-source model via OpenAI-compatible API (default provider: Groq)
+OPENAI_COMPAT_API_KEY=your_groq_api_key
+OPENAI_COMPAT_BASE_URL=https://api.groq.com/openai/v1
+OPENAI_COMPAT_MODEL=llama-3.3-70b-versatile
 
-```
-LYZR_API_KEY=your_lyzr_api_key
-LYZR_AGENT_ID=your_lyzr_agent_id
-LYZR_USER_ID=your_email_or_user_id
-LYZR_API_ENDPOINT=https://agent-prod.studio.lyzr.ai/v3/inference/chat/
+# Supabase (client-side)
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-6. Click "Deploy"
-
-### 3. Set Up Supabase Database
-
-1. Go to your Supabase project: https://ybjscpyxaauwntdxazbt.supabase.co
-2. Navigate to the SQL Editor
-3. Open and run the file: `supabase/schema.sql`
-4. This will create all tables, RLS policies, and seed the demo project
-
-### 4. Configure Storage Bucket
-
-1. In Supabase Dashboard, go to Storage
-2. Ensure the `project-files` bucket exists (created by schema.sql)
-3. Set bucket to public if not already done
+6. Click Deploy.
 
 ## Local Development
 
@@ -62,58 +50,43 @@ npm run build
 npm run preview
 ```
 
-## Environment Variables
-
-Create `.env.local` in the project root:
+## Environment Variables (`.env.local`)
 
 ```env
-# Lyzr AI Agent
-LYZR_API_KEY=your_lyzr_api_key
-LYZR_AGENT_ID=your_lyzr_agent_id
-LYZR_USER_ID=your_email_or_user_id
-LYZR_API_ENDPOINT=https://agent-prod.studio.lyzr.ai/v3/inference/chat/
+# Open-source model via OpenAI-compatible API
+OPENAI_COMPAT_API_KEY=your_groq_api_key
+OPENAI_COMPAT_BASE_URL=https://api.groq.com/openai/v1
+OPENAI_COMPAT_MODEL=llama-3.3-70b-versatile
 
-# Supabase (Client-side)
+# Optional aliases (supported)
+# GROQ_API_KEY=your_groq_api_key
+# GROQ_MODEL=llama-3.3-70b-versatile
+
+# Supabase
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-## Features Implemented
-
-- ✅ Lyzr AI Agent Integration
-- ✅ Project Context with global state
-- ✅ Multi-project support
-- ✅ Landing page with AI Ask Bar
-- ✅ Dashboard with 4 modules (Manpower, Equipment, Progress, Cost)
-- ✅ Project Overview dashboard
-- ✅ Excel/CSV upload with fuzzy column mapping
-- ✅ Chat interface with AI agent
-- ✅ Auto-ask from landing page
-- ✅ Typewriter placeholder animation
-- ✅ Responsive design
-- ✅ Dark theme with orange accent
-
 ## API Endpoints
 
-- `POST /api/agent` - Send message to Lyzr AI agent
-- `POST /api/agent` with `{ \"mode\": \"health\" }` - AI connectivity precheck
-- `GET /api/ai-health` - Lightweight AI online/offline status for UI indicators
+- `POST /api/agent` - Ask the AI model with project context.
+- `POST /api/agent` with `{ "mode": "health" }` - Connectivity precheck.
+- `GET /api/ai-health` - Lightweight AI online/offline status for UI indicators.
 
 ## Troubleshooting
 
 ### Build fails
+
 ```bash
 rm -rf node_modules package-lock.json
 npm install
 npm run build
 ```
 
-### Supabase connection issues
-- Verify environment variables are set correctly
-- Check RLS policies allow access
-- Ensure tables are created
+### AI not responding
 
-### Lyzr agent not responding
-- Verify LYZR_API_KEY is correct
-- Check agent ID matches your Lyzr agent
-- Review Vercel function logs
+- Verify `OPENAI_COMPAT_API_KEY` (or `GROQ_API_KEY`) is set in Vercel.
+- Verify `OPENAI_COMPAT_BASE_URL` is reachable.
+- Verify `OPENAI_COMPAT_MODEL` exists for your provider account.
+- Check Vercel Function logs for `/api/agent`.
+

@@ -1,4 +1,4 @@
-﻿import type { DashboardSpec, Module } from '../types';
+import type { DashboardSpec, Module } from '../types';
 
 export type AgentErrorCode =
   | 'CONFIG_MISSING'
@@ -17,7 +17,7 @@ export interface AgentContextPayload {
   recordsSampleByModule?: Partial<Record<Module, Record<string, unknown>[]>>;
 }
 
-export interface AskLyzrAgentArgs {
+export interface AskAgentArgs {
   projectId: string;
   projectName: string;
   periodDate: string | null;
@@ -27,10 +27,14 @@ export interface AskLyzrAgentArgs {
   context?: AgentContextPayload;
 }
 
-export interface LyzrAgentResponse {
+export interface AgentResponse {
   answer: string;
   raw?: unknown;
 }
+
+// Backward-compatible aliases (existing imports can continue to work).
+export type AskLyzrAgentArgs = AskAgentArgs;
+export type LyzrAgentResponse = AgentResponse;
 
 interface AgentApiErrorPayload {
   error?: string;
@@ -49,21 +53,7 @@ export class AgentProxyError extends Error {
   }
 }
 
-let warnedMissingClientEnv = false;
-
-function warnMissingClientEnv(): void {
-  if (warnedMissingClientEnv) return;
-  if (import.meta.env.VITE_LYZR_API_KEY && import.meta.env.VITE_LYZR_AGENT_ID) return;
-
-  warnedMissingClientEnv = true;
-  console.warn(
-    'VITE_LYZR_API_KEY or VITE_LYZR_AGENT_ID is missing. Ensure server-side LYZR_* vars are set in Vercel.'
-  );
-}
-
-export async function askLyzrAgent(args: AskLyzrAgentArgs): Promise<LyzrAgentResponse> {
-  warnMissingClientEnv();
-
+export async function askAgent(args: AskAgentArgs): Promise<AgentResponse> {
   const res = await fetch('/api/agent', {
     method: 'POST',
     headers: {
@@ -75,7 +65,7 @@ export async function askLyzrAgent(args: AskLyzrAgentArgs): Promise<LyzrAgentRes
     }),
   });
 
-  const payload = (await res.json().catch(() => ({}))) as LyzrAgentResponse & AgentApiErrorPayload;
+  const payload = (await res.json().catch(() => ({}))) as AgentResponse & AgentApiErrorPayload;
   if (!res.ok || !payload.answer) {
     throw new AgentProxyError(
       payload.error || 'Failed to connect to AI service.',
@@ -90,13 +80,13 @@ export async function askLyzrAgent(args: AskLyzrAgentArgs): Promise<LyzrAgentRes
   };
 }
 
+export const askLyzrAgent = askAgent;
+
 export async function checkAgentHealth(): Promise<{
   ok: boolean;
   errorCode?: AgentErrorCode;
   error?: string;
 }> {
-  warnMissingClientEnv();
-
   try {
     const res = await fetch('/api/agent', {
       method: 'POST',
@@ -132,7 +122,7 @@ export function getAgentFriendlyErrorMessage(errorCode?: AgentErrorCode): string
   switch (errorCode) {
     case 'CONFIG_MISSING':
     case 'AUTH_FAILED':
-      return 'AI service is temporarily unavailable - check your API key configuration.';
+      return 'AI service is temporarily unavailable - check your model API key configuration.';
     case 'SERVICE_UNAVAILABLE':
       return 'AI service is temporarily unavailable after retries. Please try again shortly.';
     case 'UPSTREAM_ERROR':
@@ -140,3 +130,4 @@ export function getAgentFriendlyErrorMessage(errorCode?: AgentErrorCode): string
       return 'I apologize, but I am unable to connect to the AI agent right now. Please try again later.';
   }
 }
+

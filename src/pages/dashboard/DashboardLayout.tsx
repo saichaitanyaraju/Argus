@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -606,7 +606,7 @@ export default function DashboardLayout({ module, label }: DashboardLayoutProps)
               </div>
               <div>
                 <p className="text-sm font-display font-semibold text-white">Argus Agent</p>
-                <p className="text-xs text-white/30 font-mono">powered by Lyzr AI</p>
+                <p className="text-xs text-white/30 font-mono">powered by open-source LLM</p>
               </div>
             </div>
             <button

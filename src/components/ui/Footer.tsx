@@ -8,9 +8,10 @@ export default function Footer() {
       <div className="max-w-5xl mx-auto px-6">
         <p className="text-center text-xs text-gray-500">
           Argus v1.0 - Built for construction project control
-          {isOnline ? ' - Powered by Lyzr AI' : ''}
+          {isOnline ? ' - Powered by open-source LLM' : ''}
         </p>
       </div>
     </footer>
   );
 }
+

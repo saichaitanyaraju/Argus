@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
 import {
-  askLyzrAgent,
+  askAgent,
   AgentProxyError,
   type AgentErrorCode,
-  type AskLyzrAgentArgs,
+  type AskAgentArgs,
   getAgentFriendlyErrorMessage,
 } from '../lib/lyzrAgent';
 
@@ -25,12 +25,12 @@ export type ArgusChatResult =
     };
 
 export function useArgusChat() {
-  const sendMessage = useCallback(async (args: AskLyzrAgentArgs): Promise<ArgusChatResult> => {
+  const sendMessage = useCallback(async (args: AskAgentArgs): Promise<ArgusChatResult> => {
     let retry = 0;
 
     while (retry <= MAX_RETRIES) {
       try {
-        const response = await askLyzrAgent(args);
+        const response = await askAgent(args);
         return { ok: true, answer: response.answer };
       } catch (error) {
         const code =

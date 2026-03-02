@@ -17,36 +17,64 @@ interface AgentRequestBody {
   context?: unknown;
 }
 
-interface LyzrCallResult {
+interface AgentCallResult {
   answer: string;
   raw: unknown;
 }
 
-const LYZR_API_KEY = process.env.LYZR_API_KEY || '';
-const LYZR_AGENT_ID = process.env.LYZR_AGENT_ID || '';
-const LYZR_USER_ID = process.env.LYZR_USER_ID || 'argus-system';
-const LYZR_API_ENDPOINT =
-  process.env.LYZR_API_ENDPOINT || 'https://agent-prod.studio.lyzr.ai/v3/inference/chat/';
+interface OpenAICompatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+interface OpenAICompatChoice {
+  message?: {
+    content?: string | Array<{ type?: string; text?: string }>;
+  };
+}
+
+interface OpenAICompatResponse {
+  choices?: OpenAICompatChoice[];
+}
+
+const OPENAI_COMPAT_API_KEY = process.env.OPENAI_COMPAT_API_KEY || process.env.GROQ_API_KEY || '';
+const OPENAI_COMPAT_BASE_URL = (
+  process.env.OPENAI_COMPAT_BASE_URL ||
+  process.env.GROQ_API_BASE_URL ||
+  'https://api.groq.com/openai/v1'
+).replace(/\/+$/, '');
+const OPENAI_COMPAT_MODEL =
+  process.env.OPENAI_COMPAT_MODEL || process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+const OPENAI_COMPAT_ENDPOINT = `${OPENAI_COMPAT_BASE_URL}/chat/completions`;
 
 const RETRY_COUNT = 2;
 const RETRY_DELAY_MS = 2000;
 const REQUEST_TIMEOUT_MS = 20000;
+const DEFAULT_MAX_TOKENS = 900;
+
+const ARGUS_SYSTEM_PROMPT = [
+  'You are Argus, a construction project analytics copilot.',
+  'Use only the provided project context and data in your answer.',
+  'If required data is missing, say what is missing instead of guessing.',
+  'Keep the response concise and numeric where possible.',
+  'When comparing values, include short calculations.',
+].join(' ');
 
 function hasRequiredConfig(): boolean {
-  return Boolean(LYZR_API_KEY && LYZR_AGENT_ID && LYZR_API_ENDPOINT);
+  return Boolean(OPENAI_COMPAT_API_KEY && OPENAI_COMPAT_ENDPOINT && OPENAI_COMPAT_MODEL);
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-class LyzrError extends Error {
+class AgentProviderError extends Error {
   code: AgentErrorCode;
   status: number;
 
   constructor(message: string, code: AgentErrorCode, status = 500) {
     super(message);
-    this.name = 'LyzrError';
+    this.name = 'AgentProviderError';
     this.code = code;
     this.status = status;
   }
@@ -72,47 +100,63 @@ function mapErrorStatus(errorCode: AgentErrorCode): number {
   }
 }
 
-async function callLyzr(message: string, sessionId: string): Promise<LyzrCallResult> {
+function extractAnswer(payload: OpenAICompatResponse): string {
+  const content = payload?.choices?.[0]?.message?.content;
+  if (typeof content === 'string' && content.trim()) return content.trim();
+  if (Array.isArray(content)) {
+    const text = content
+      .map((part) => (typeof part?.text === 'string' ? part.text : ''))
+      .join('\n')
+      .trim();
+    if (text) return text;
+  }
+  throw new AgentProviderError('Model returned an empty response.', 'UPSTREAM_ERROR', 502);
+}
+
+async function callOpenSourceModel(
+  messages: OpenAICompatMessage[],
+  maxTokens = DEFAULT_MAX_TOKENS
+): Promise<AgentCallResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const res = await fetch(LYZR_API_ENDPOINT, {
+    const res = await fetch(OPENAI_COMPAT_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': LYZR_API_KEY,
+        Authorization: `Bearer ${OPENAI_COMPAT_API_KEY}`,
       },
       body: JSON.stringify({
-        user_id: LYZR_USER_ID,
-        agent_id: LYZR_AGENT_ID,
-        session_id: sessionId,
-        message,
+        model: OPENAI_COMPAT_MODEL,
+        temperature: 0.2,
+        max_tokens: maxTokens,
+        messages,
       }),
       signal: controller.signal,
     });
 
     if (!res.ok) {
       const errorText = await res.text();
-      throw new LyzrError(
-        `Lyzr API error: ${res.status} - ${errorText}`,
+      throw new AgentProviderError(
+        `Model API error: ${res.status} - ${errorText}`,
         classifyStatusCode(res.status),
         res.status
       );
     }
 
-    const data = await res.json();
+    const data = (await res.json()) as OpenAICompatResponse;
     return {
-      answer: data.response || data.message || 'No response from agent',
+      answer: extractAnswer(data),
       raw: data,
     };
   } catch (error) {
-    if (error instanceof LyzrError) throw error;
+    if (error instanceof AgentProviderError) throw error;
     if ((error as { name?: string })?.name === 'AbortError') {
-      throw new LyzrError('Lyzr request timed out.', 'SERVICE_UNAVAILABLE', 504);
+      throw new AgentProviderError('Model request timed out.', 'SERVICE_UNAVAILABLE', 504);
     }
-    throw new LyzrError(
-      error instanceof Error ? error.message : 'Failed to connect to Lyzr.',
+    throw new AgentProviderError(
+      error instanceof Error ? error.message : 'Failed to connect to model provider.',
       'SERVICE_UNAVAILABLE',
       503
     );
@@ -121,26 +165,26 @@ async function callLyzr(message: string, sessionId: string): Promise<LyzrCallRes
   }
 }
 
-async function callLyzrWithRetry(message: string, sessionId: string): Promise<LyzrCallResult> {
+async function callWithRetry(messages: OpenAICompatMessage[]): Promise<AgentCallResult> {
   let attempt = 0;
-  let lastError: LyzrError | null = null;
+  let lastError: AgentProviderError | null = null;
 
   while (attempt <= RETRY_COUNT) {
     try {
-      return await callLyzr(message, sessionId);
+      return await callOpenSourceModel(messages);
     } catch (error) {
-      const lyzrError =
-        error instanceof LyzrError
+      const providerError =
+        error instanceof AgentProviderError
           ? error
-          : new LyzrError(
-              error instanceof Error ? error.message : 'Unknown Lyzr error.',
+          : new AgentProviderError(
+              error instanceof Error ? error.message : 'Unknown provider error.',
               'UPSTREAM_ERROR',
               500
             );
-      lastError = lyzrError;
+      lastError = providerError;
 
-      if (lyzrError.code === 'AUTH_FAILED' || lyzrError.code === 'CONFIG_MISSING') {
-        throw lyzrError;
+      if (providerError.code === 'AUTH_FAILED' || providerError.code === 'CONFIG_MISSING') {
+        throw providerError;
       }
 
       if (attempt < RETRY_COUNT) {
@@ -150,10 +194,10 @@ async function callLyzrWithRetry(message: string, sessionId: string): Promise<Ly
     attempt += 1;
   }
 
-  throw lastError || new LyzrError('Lyzr service unavailable.', 'SERVICE_UNAVAILABLE', 503);
+  throw lastError || new AgentProviderError('Model service unavailable.', 'SERVICE_UNAVAILABLE', 503);
 }
 
-function buildAskMessage(body: AgentRequestBody): string {
+function buildUserMessage(body: AgentRequestBody): string {
   const periodDate = body.periodDate || new Date().toISOString().split('T')[0];
   return `
 [DATA CONTEXT]
@@ -168,6 +212,20 @@ ${JSON.stringify(body.context || {}, null, 2)}
 [USER QUESTION]
 ${body.userMessage || ''}
 `;
+}
+
+function buildAskMessages(body: AgentRequestBody): OpenAICompatMessage[] {
+  return [
+    { role: 'system', content: ARGUS_SYSTEM_PROMPT },
+    { role: 'user', content: buildUserMessage(body) },
+  ];
+}
+
+function buildHealthMessages(): OpenAICompatMessage[] {
+  return [
+    { role: 'system', content: 'Respond in one token.' },
+    { role: 'user', content: 'Reply with OK' },
+  ];
 }
 
 function setCorsHeaders(res: VercelResponse): void {
@@ -194,27 +252,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({
       ok: false,
       errorCode: 'CONFIG_MISSING',
-      error: 'Missing Lyzr server configuration.',
+      error:
+        'Missing model server configuration. Set OPENAI_COMPAT_API_KEY (or GROQ_API_KEY), OPENAI_COMPAT_BASE_URL, and OPENAI_COMPAT_MODEL.',
     });
   }
 
   if (mode === 'health') {
     try {
-      await callLyzr('Return the single word: OK', `health-${Date.now()}`);
+      await callOpenSourceModel(buildHealthMessages(), 8);
       return res.status(200).json({ ok: true });
     } catch (error) {
-      const lyzrError =
-        error instanceof LyzrError
+      const providerError =
+        error instanceof AgentProviderError
           ? error
-          : new LyzrError(
+          : new AgentProviderError(
               error instanceof Error ? error.message : 'AI service unavailable.',
               'SERVICE_UNAVAILABLE',
               503
             );
-      return res.status(mapErrorStatus(lyzrError.code)).json({
+      return res.status(mapErrorStatus(providerError.code)).json({
         ok: false,
-        errorCode: lyzrError.code,
-        error: lyzrError.message,
+        errorCode: providerError.code,
+        error: providerError.message,
       });
     }
   }
@@ -227,26 +286,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const sessionId = `${body.projectId}-${body.sessionId}`;
-    const message = buildAskMessage(body);
-    const response = await callLyzrWithRetry(message, sessionId);
+    const response = await callWithRetry(buildAskMessages(body));
     return res.status(200).json({
       answer: response.answer,
       raw: response.raw,
     });
   } catch (error) {
-    const lyzrError =
-      error instanceof LyzrError
+    const providerError =
+      error instanceof AgentProviderError
         ? error
-        : new LyzrError(
+        : new AgentProviderError(
             error instanceof Error ? error.message : 'AI service unavailable.',
             'UPSTREAM_ERROR',
             500
           );
 
-    return res.status(mapErrorStatus(lyzrError.code)).json({
-      errorCode: lyzrError.code,
-      error: lyzrError.message,
+    return res.status(mapErrorStatus(providerError.code)).json({
+      errorCode: providerError.code,
+      error: providerError.message,
     });
   }
 }
+
