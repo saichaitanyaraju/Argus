@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+﻿import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Command } from 'lucide-react';
+import { Sparkles, Command, Loader2 } from 'lucide-react';
 import { AI_PLACEHOLDER_PHRASES, useTypewriterPlaceholder } from './TypewriterPlaceholder';
+import { checkAgentHealth, getAgentFriendlyErrorMessage } from '../../lib/lyzrAgent';
 
 interface AIAskBarProps {
   autoFocus?: boolean;
@@ -20,10 +21,11 @@ export default function AIAskBar({ autoFocus = false, initialValue = '', onSubmi
   const inputRef = useRef<HTMLInputElement>(null);
   const [question, setQuestion] = useState(initialValue);
   const [isFocused, setIsFocused] = useState(false);
-  
+  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
+  const [healthError, setHealthError] = useState('');
+
   const placeholderText = useTypewriterPlaceholder(AI_PLACEHOLDER_PHRASES, 50, 2000);
 
-  // Handle CMD+K / CTRL+K shortcut
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -36,38 +38,49 @@ export default function AIAskBar({ autoFocus = false, initialValue = '', onSubmi
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Auto-focus if requested
   useEffect(() => {
     if (autoFocus && inputRef.current) {
       inputRef.current.focus();
     }
   }, [autoFocus]);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     const trimmedQuestion = question.trim();
-    if (!trimmedQuestion) return;
+    if (!trimmedQuestion || isCheckingHealth) return;
 
     if (onSubmit) {
       onSubmit(trimmedQuestion);
-    } else {
-      navigate(`/dashboard?q=${encodeURIComponent(trimmedQuestion)}&autoask=true`);
+      return;
     }
-  }, [question, navigate, onSubmit]);
+
+    setHealthError('');
+    setIsCheckingHealth(true);
+
+    const health = await checkAgentHealth();
+    setIsCheckingHealth(false);
+
+    if (!health.ok) {
+      setHealthError(getAgentFriendlyErrorMessage(health.errorCode));
+      return;
+    }
+
+    navigate(`/dashboard?q=${encodeURIComponent(trimmedQuestion)}&autoask=true`);
+  }, [question, navigate, onSubmit, isCheckingHealth]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      handleSubmit();
+      void handleSubmit();
     }
   };
 
   const handleQuickPromptClick = (prompt: string) => {
     setQuestion(prompt);
+    setHealthError('');
     inputRef.current?.focus();
   };
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      {/* Main input container */}
       <div
         className={`flex items-center gap-3 h-14 px-4 bg-[rgba(255,255,255,0.06)] border rounded-2xl transition-all duration-200 ${
           isFocused
@@ -75,7 +88,6 @@ export default function AIAskBar({ autoFocus = false, initialValue = '', onSubmi
             : 'border-[rgba(255,255,255,0.12)] hover:border-[rgba(255,255,255,0.2)]'
         }`}
       >
-        {/* Sparkles icon with pulse */}
         <div className="flex-shrink-0">
           <Sparkles
             size={20}
@@ -83,12 +95,14 @@ export default function AIAskBar({ autoFocus = false, initialValue = '', onSubmi
           />
         </div>
 
-        {/* Input field */}
         <input
           ref={inputRef}
           type="text"
           value={question}
-          onChange={(e) => setQuestion(e.target.value)}
+          onChange={(e) => {
+            setQuestion(e.target.value);
+            if (healthError) setHealthError('');
+          }}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           onKeyDown={handleKeyDown}
@@ -96,9 +110,7 @@ export default function AIAskBar({ autoFocus = false, initialValue = '', onSubmi
           className="flex-1 bg-transparent text-sm text-white/80 placeholder-white/30 outline-none"
         />
 
-        {/* Right side controls */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* CMD+K badge */}
           <button
             onClick={() => inputRef.current?.focus()}
             className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-white/40 text-xs hover:bg-white/10 hover:text-white/60 transition-colors"
@@ -107,19 +119,26 @@ export default function AIAskBar({ autoFocus = false, initialValue = '', onSubmi
             <span>K</span>
           </button>
 
-          {/* Ask button */}
           <button
-            onClick={handleSubmit}
-            disabled={!question.trim()}
+            onClick={() => void handleSubmit()}
+            disabled={!question.trim() || isCheckingHealth}
             className="flex items-center gap-1.5 px-4 py-2 bg-[#FF6A00] hover:bg-[#FF8C38] disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
           >
-            Ask Argus
-            <span className="text-xs">→</span>
+            {isCheckingHealth ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                Checking...
+              </>
+            ) : (
+              <>
+                Ask Argus
+                <span className="text-xs">→</span>
+              </>
+            )}
           </button>
         </div>
       </div>
 
-      {/* Quick prompt chips */}
       <div className="flex flex-wrap justify-center gap-2 mt-4">
         {QUICK_PROMPTS.map((prompt) => (
           <button
@@ -131,6 +150,8 @@ export default function AIAskBar({ autoFocus = false, initialValue = '', onSubmi
           </button>
         ))}
       </div>
+
+      {healthError && <p className="mt-3 text-center text-xs text-red-300/90">{healthError}</p>}
     </div>
   );
 }

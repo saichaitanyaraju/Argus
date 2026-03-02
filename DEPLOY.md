@@ -27,9 +27,8 @@ LYZR_API_KEY=your_lyzr_api_key
 LYZR_AGENT_ID=your_lyzr_agent_id
 LYZR_USER_ID=your_email_or_user_id
 LYZR_API_ENDPOINT=https://agent-prod.studio.lyzr.ai/v3/inference/chat/
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 6. Click "Deploy"
@@ -77,9 +76,6 @@ LYZR_API_ENDPOINT=https://agent-prod.studio.lyzr.ai/v3/inference/chat/
 # Supabase (Client-side)
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-
-# Supabase (Server-side only)
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
 ## Features Implemented
@@ -100,6 +96,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ## API Endpoints
 
 - `POST /api/agent` - Send message to Lyzr AI agent
+- `POST /api/agent` with `{ \"mode\": \"health\" }` - AI connectivity precheck
 
 ## Troubleshooting
 

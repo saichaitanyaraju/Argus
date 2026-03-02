@@ -1,5 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import { ProjectProvider } from './context/ProjectContext';
+import { DashboardDataProvider } from './context/DashboardDataContext';
+import { ToastProvider } from './components/ui/ToastHost';
 import Landing from './pages/Landing';
 import OverviewDashboard from './pages/dashboard/OverviewDashboard';
 import ManpowerDashboard from './pages/dashboard/ManpowerDashboard';
@@ -10,14 +12,18 @@ import CostDashboard from './pages/dashboard/CostDashboard';
 function App() {
   return (
     <ProjectProvider>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/dashboard" element={<OverviewDashboard />} />
-        <Route path="/dashboard/manpower" element={<ManpowerDashboard />} />
-        <Route path="/dashboard/equipment" element={<EquipmentDashboard />} />
-        <Route path="/dashboard/progress" element={<ProgressDashboard />} />
-        <Route path="/dashboard/cost" element={<CostDashboard />} />
-      </Routes>
+      <ToastProvider>
+        <DashboardDataProvider>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/dashboard" element={<OverviewDashboard />} />
+            <Route path="/dashboard/manpower" element={<ManpowerDashboard />} />
+            <Route path="/dashboard/equipment" element={<EquipmentDashboard />} />
+            <Route path="/dashboard/progress" element={<ProgressDashboard />} />
+            <Route path="/dashboard/cost" element={<CostDashboard />} />
+          </Routes>
+        </DashboardDataProvider>
+      </ToastProvider>
     </ProjectProvider>
   );
 }

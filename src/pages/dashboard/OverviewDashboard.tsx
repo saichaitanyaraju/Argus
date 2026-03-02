@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -7,10 +7,7 @@ import {
   Wrench,
   BarChart3,
   DollarSign,
-  TrendingUp,
-  TrendingDown,
   Activity,
-  Calendar,
   MessageSquare,
   X,
   Bot,
@@ -19,33 +16,19 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useProject } from '../../context/ProjectContext';
+import { useDashboardData } from '../../context/DashboardDataContext';
 import { supabase } from '../../lib/supabase';
 import { Module, DashboardSpec, ChatMessage, KPI } from '../../types';
-import { getDemoSpec } from '../../lib/demoData';
 import {
   askLyzrAgent,
-  fetchKpiSnapshots,
-  fetchModuleRecords,
-  persistAgentMessage,
-  fetchChatHistory,
+  AgentProxyError,
+  getAgentFriendlyErrorMessage,
 } from '../../lib/lyzrAgent';
 import KPICard from '../../components/dashboard/KPICard';
-import VisualCard from '../../components/dashboard/VisualCard';
 import InsightsPanel from '../../components/dashboard/InsightsPanel';
-import UploadZone from '../../components/upload/UploadZone';
 import Badge from '../../components/ui/Badge';
 import { format } from 'date-fns';
-
-interface ModuleSummary {
-  module: Module;
-  label: string;
-  icon: typeof Users;
-  color: string;
-  bgColor: string;
-  hasData: boolean;
-  kpis: KPI[];
-  lastUpdated?: string;
-}
+import { useToast } from '../../components/ui/ToastHost';
 
 const MODULE_CONFIG: Record<Module, { label: string; icon: typeof Users; color: string; bgColor: string }> = {
   manpower: { label: 'Man Power', icon: Users, color: 'text-blue-400', bgColor: 'bg-blue-500/10' },
@@ -56,92 +39,174 @@ const MODULE_CONFIG: Record<Module, { label: string; icon: typeof Users; color: 
 
 export default function OverviewDashboard() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { project, projectId, projectName } = useProject();
+  const { pushToast } = useToast();
 
-  const [specs, setSpecs] = useState<Partial<Record<Module, DashboardSpec>>>({});
+  const {
+    getProjectModuleData,
+    hasModuleData,
+    setModuleData,
+    loadDemoModule,
+    loadAllDemoModules,
+  } = useDashboardData();
+
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sessionId] = useState(() => `session-${Date.now()}`);
+  const autoAskHandledRef = useRef(false);
+  const keyMetricsRef = useRef<HTMLDivElement>(null);
 
   const modules: Module[] = ['manpower', 'equipment', 'progress', 'cost'];
+  const isPublicMode = searchParams.get('public') === '1';
 
-  // Handle auto-ask from URL params
+  const entries = getProjectModuleData(projectId);
+  const specs: Partial<Record<Module, DashboardSpec>> = useMemo(() => {
+    const next: Partial<Record<Module, DashboardSpec>> = {};
+    modules.forEach((module) => {
+      if (entries[module]?.spec) {
+        next[module] = entries[module]!.spec;
+      }
+    });
+    return next;
+  }, [entries]);
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    const loadMissingFromRemote = async () => {
+      for (const module of modules) {
+        if (entries[module]) continue;
+        try {
+          const { data } = await supabase.functions.invoke('get-dashboard', {
+            body: { module, project_id: projectId },
+          });
+          if (data?.spec) {
+            setModuleData(
+              {
+                module,
+                spec: data.spec as DashboardSpec,
+                source: 'remote',
+                recordsSample: [],
+              },
+              projectId
+            );
+          }
+        } catch {
+          // Optional fallback only.
+        }
+      }
+    };
+
+    void loadMissingFromRemote();
+  }, [projectId, entries, setModuleData]);
+
   useEffect(() => {
     const q = searchParams.get('q');
     const autoask = searchParams.get('autoask');
 
-    if (autoask === 'true' && q) {
-      setChatOpen(true);
-      setChatInput(q);
-      const timer = setTimeout(() => {
-        handleSendMessage(q);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [searchParams]);
+    if (autoAskHandledRef.current || autoask !== 'true' || !q) return;
 
-  // Load chat history when chat opens
-  useEffect(() => {
-    if (chatOpen && projectId) {
-      loadChatHistory();
-    }
-  }, [chatOpen, projectId]);
+    autoAskHandledRef.current = true;
+    setChatOpen(true);
 
-  const loadChatHistory = async () => {
-    if (!projectId) return;
-    const history = await fetchChatHistory(projectId, sessionId);
-    if (history.length > 0) {
-      const messages: ChatMessage[] = history.map((h) => ({
-        id: h.id,
-        role: h.role as 'user' | 'assistant',
-        content: h.content,
-        timestamp: new Date(h.created_at || Date.now()),
-      }));
-      setChatMessages(messages);
+    const timer = window.setTimeout(() => {
+      void handleSendMessage(q);
+    }, 500);
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('autoask');
+    setSearchParams(nextParams, { replace: true });
+
+    return () => window.clearTimeout(timer);
+  }, [searchParams, setSearchParams]);
+
+  const handleLoadDemo = (module: Module) => {
+    if (!projectId) {
+      pushToast('No project selected.', 'warning');
+      return;
     }
+
+    loadDemoModule(module, projectId);
+    pushToast(`${MODULE_CONFIG[module].label} demo data loaded.`, 'success');
   };
 
-  const loadAllSpecs = useCallback(async () => {
-    if (!projectId) return;
-    
-    for (const mod of modules) {
-      try {
-        const { data } = await supabase.functions.invoke('get-dashboard', {
-          body: { module: mod, project_id: projectId },
-        });
-        if (data?.spec) {
-          setSpecs((prev) => ({ ...prev, [mod]: data.spec }));
-        }
-      } catch {
-        // Silent fail
-      }
+  const handleLoadAllDemo = () => {
+    if (!projectId) {
+      pushToast('No project selected.', 'warning');
+      return;
     }
-  }, [projectId]);
 
-  useEffect(() => {
-    loadAllSpecs();
-  }, [loadAllSpecs]);
-
-  const handleLoadDemo = (mod: Module) => {
-    const demo = getDemoSpec(mod);
-    if (demo) {
-      setSpecs((prev) => ({ ...prev, [mod]: demo }));
-    }
+    loadAllDemoModules(projectId);
+    pushToast('All demo data loaded.', 'success');
+    window.setTimeout(() => {
+      keyMetricsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
   };
 
   const handleRefresh = async () => {
+    if (!projectId) return;
+
     setIsRefreshing(true);
-    await loadAllSpecs();
-    setIsRefreshing(false);
+    try {
+      for (const module of modules) {
+        const { data } = await supabase.functions.invoke('get-dashboard', {
+          body: { module, project_id: projectId },
+        });
+        if (data?.spec) {
+          setModuleData(
+            {
+              module,
+              spec: data.spec as DashboardSpec,
+              source: 'remote',
+              recordsSample: [],
+            },
+            projectId
+          );
+        }
+      }
+      pushToast('Overview refreshed.', 'info');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const buildShareLink = () => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('public', '1');
+
+    const current = new URL(window.location.href);
+    const hashPath = current.hash.split('?')[0] || '#/dashboard';
+    return `${current.origin}${current.pathname}${hashPath}?${nextParams.toString()}`;
+  };
+
+  const handlePublicModeToggle = async () => {
+    const nextParams = new URLSearchParams(searchParams);
+
+    if (isPublicMode) {
+      nextParams.delete('public');
+      setSearchParams(nextParams);
+      pushToast('Public mode disabled.', 'info');
+      return;
+    }
+
+    nextParams.set('public', '1');
+    setSearchParams(nextParams);
+
+    try {
+      await navigator.clipboard.writeText(buildShareLink());
+      pushToast('Public link copied!', 'success');
+    } catch {
+      pushToast('Public mode enabled. Copy link from address bar.', 'warning');
+    }
   };
 
   const handleSendMessage = async (messageText?: string) => {
-    const text = messageText || chatInput;
-    if (!text.trim() || isChatLoading || !projectId) return;
+    const text = (messageText || chatInput).trim();
+    if (!text || isChatLoading || !projectId) return;
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -149,37 +214,29 @@ export default function OverviewDashboard() {
       content: text,
       timestamp: new Date(),
     };
+
     setChatMessages((prev) => [...prev, userMsg]);
     setChatInput('');
     setIsChatLoading(true);
 
     try {
-      // Persist user message
-      await persistAgentMessage(projectId, sessionId, 'user', text, modules);
-
-      // Fetch KPI snapshots and records for all modules
-      const kpiSnapshots = await fetchKpiSnapshots(projectId, modules);
-      const allRecords: any[] = [];
-      
-      for (const mod of modules) {
-        const records = await fetchModuleRecords(projectId, mod);
-        allRecords.push(...records.slice(0, 5)); // Limit per module
-      }
-
-      // Call Lyzr agent with all modules context
+      const activeModules = modules.filter((module) => Boolean(specs[module]));
       const response = await askLyzrAgent({
         projectId,
         projectName: projectName || 'Demo Project',
         periodDate: new Date().toISOString().split('T')[0],
-        modules,
-        kpiSnapshots,
-        records: allRecords,
+        modules: activeModules.length > 0 ? activeModules : modules,
         userMessage: text,
         sessionId,
+        context: {
+          activeModule: 'overview',
+          moduleSpecs: specs,
+          recordsSampleByModule: modules.reduce((acc, module) => {
+            acc[module] = entries[module]?.recordsSample || [];
+            return acc;
+          }, {} as Partial<Record<Module, Record<string, unknown>[]>>),
+        },
       });
-
-      // Persist assistant message
-      await persistAgentMessage(projectId, sessionId, 'assistant', response.answer, modules);
 
       const assistantMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -190,31 +247,31 @@ export default function OverviewDashboard() {
       setChatMessages((prev) => [...prev, assistantMsg]);
     } catch (error) {
       console.error('Error calling agent:', error);
-      const fallbackMsg: ChatMessage = {
+      const errorCode = error instanceof AgentProxyError ? error.code : undefined;
+      const assistantMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'I apologize, but I am unable to connect to the AI agent right now. Please try again later.',
+        content: getAgentFriendlyErrorMessage(errorCode),
         timestamp: new Date(),
       };
-      setChatMessages((prev) => [...prev, fallbackMsg]);
+      setChatMessages((prev) => [...prev, assistantMsg]);
     } finally {
       setIsChatLoading(false);
     }
   };
 
-  // Calculate health score based on available data
   const calculateHealthScore = (): { score: number; status: 'good' | 'warning' | 'danger' } => {
-    const availableModules = modules.filter((m) => specs[m]);
+    const availableModules = modules.filter((module) => specs[module]);
     if (availableModules.length === 0) return { score: 0, status: 'danger' };
 
     let totalScore = 0;
-    availableModules.forEach((mod) => {
-      const spec = specs[mod];
+    availableModules.forEach((module) => {
+      const spec = specs[module];
       if (!spec) return;
-      
-      const dangerCount = spec.kpis.filter((k) => k.status === 'danger').length;
-      const warningCount = spec.kpis.filter((k) => k.status === 'warning').length;
-      
+
+      const dangerCount = spec.kpis.filter((kpi) => kpi.status === 'danger').length;
+      const warningCount = spec.kpis.filter((kpi) => kpi.status === 'warning').length;
+
       if (dangerCount === 0 && warningCount === 0) totalScore += 25;
       else if (dangerCount === 0) totalScore += 15;
       else totalScore += 5;
@@ -227,41 +284,46 @@ export default function OverviewDashboard() {
     };
   };
 
-  const health = calculateHealthScore();
-  const availableModules = modules.filter((m) => specs[m]);
-  const totalModules = modules.length;
-
-  // Aggregate all insights
-  const allInsights = modules
-    .flatMap((m) => specs[m]?.insights || [])
-    .slice(0, 6);
-
-  // Aggregate all KPIs for summary
   const aggregateKpis = (): KPI[] => {
     const kpis: KPI[] = [];
-    
-    modules.forEach((mod) => {
-      const spec = specs[mod];
+
+    modules.forEach((module) => {
+      const spec = specs[module];
       if (!spec) return;
-      
-      const config = MODULE_CONFIG[mod];
-      const criticalKpi = spec.kpis.find((k) => k.status === 'danger') || spec.kpis[0];
-      
+
+      const config = MODULE_CONFIG[module];
+      const criticalKpi = spec.kpis.find((kpi) => kpi.status === 'danger') || spec.kpis[0];
+
       if (criticalKpi) {
         kpis.push({
           ...criticalKpi,
-          id: `${mod}_${criticalKpi.id}`,
+          id: `${module}_${criticalKpi.id}`,
           label: `${config.label}: ${criticalKpi.label}`,
         });
       }
     });
-    
+
     return kpis.slice(0, 4);
   };
 
+  const health = calculateHealthScore();
+  const availableModules = modules.filter((module) => specs[module]);
+  const totalModules = modules.length;
+  const allInsights = modules.flatMap((module) => specs[module]?.insights || []).slice(0, 6);
+
+  const navigateWithPublic = useCallback(
+    (path: string) => {
+      if (isPublicMode) {
+        navigate(`${path}?public=1`);
+      } else {
+        navigate(path);
+      }
+    },
+    [isPublicMode, navigate]
+  );
+
   return (
     <div className="min-h-screen bg-[#0f1117]">
-      {/* Top Nav */}
       <nav className="sticky top-0 z-30 bg-[#0f1117]/95 backdrop-blur-md border-b border-white/6 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
@@ -275,11 +337,10 @@ export default function OverviewDashboard() {
           <div className="flex items-center gap-2">
             <LayoutDashboard size={18} className="text-[#FF6A00]" />
             <span className="text-sm font-display font-semibold text-white">Project Overview</span>
-            {project && (
-              <span className="text-xs text-white/40">· {project.name}</span>
-            )}
+            {project && <span className="text-xs text-white/40">· {project.name}</span>}
           </div>
         </div>
+
         <div className="flex items-center gap-3">
           <button
             onClick={handleRefresh}
@@ -289,134 +350,152 @@ export default function OverviewDashboard() {
             <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
             Refresh
           </button>
-          <Badge variant="default">Public Mode</Badge>
+
+          <button
+            onClick={() => void handlePublicModeToggle()}
+            title="Create and toggle shareable read-only mode"
+            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-mono font-medium border transition-colors ${
+              isPublicMode
+                ? 'bg-green-500/10 text-green-300 border-green-500/30'
+                : 'bg-white/10 text-white/70 border-white/10 hover:bg-white/20'
+            }`}
+          >
+            Public Mode
+          </button>
         </div>
       </nav>
 
       <div className="max-w-7xl mx-auto px-6 py-6">
-        {/* Health Score Card */}
+        {!isPublicMode && (
+          <div className="mb-4 flex justify-end">
+            <button
+              onClick={handleLoadAllDemo}
+              className="px-4 py-2 rounded-xl bg-[#FF6A00] hover:bg-[#FF8C38] text-white text-sm font-medium transition-colors"
+            >
+              Load All Demo Data
+            </button>
+          </div>
+        )}
+
         <div className="mb-6 p-6 rounded-2xl bg-gradient-to-br from-[#1E3A5F]/50 to-[#0f1117] border border-white/10">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
-              <h2 className="text-lg font-display font-semibold text-white mb-1">
-                Project Health Score
-              </h2>
+              <h2 className="text-lg font-display font-semibold text-white mb-1">Project Health Score</h2>
               <p className="text-sm text-white/40">
                 {availableModules.length} of {totalModules} modules active
               </p>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-right">
-                <div className={`text-4xl font-display font-bold ${
-                  health.status === 'good' ? 'text-green-400' : 
-                  health.status === 'warning' ? 'text-yellow-400' : 'text-red-400'
-                }`}>
+                <div
+                  className={`text-4xl font-display font-bold ${
+                    health.status === 'good'
+                      ? 'text-green-400'
+                      : health.status === 'warning'
+                        ? 'text-yellow-400'
+                        : 'text-red-400'
+                  }`}
+                >
                   {health.score}%
                 </div>
                 <div className="text-xs text-white/40 uppercase tracking-wider">
-                  {health.status === 'good' ? 'Healthy' : 
-                   health.status === 'warning' ? 'Needs Attention' : 'Critical'}
+                  {health.status === 'good'
+                    ? 'Healthy'
+                    : health.status === 'warning'
+                      ? 'Needs Attention'
+                      : 'Critical'}
                 </div>
               </div>
-              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
-                health.status === 'good' ? 'bg-green-500/10 border border-green-500/20' : 
-                health.status === 'warning' ? 'bg-yellow-500/10 border border-yellow-500/20' : 
-                'bg-red-500/10 border border-red-500/20'
-              }`}>
-                <Activity size={28} className={
-                  health.status === 'good' ? 'text-green-400' : 
-                  health.status === 'warning' ? 'text-yellow-400' : 'text-red-400'
-                } />
+              <div
+                className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
+                  health.status === 'good'
+                    ? 'bg-green-500/10 border border-green-500/20'
+                    : health.status === 'warning'
+                      ? 'bg-yellow-500/10 border border-yellow-500/20'
+                      : 'bg-red-500/10 border border-red-500/20'
+                }`}
+              >
+                <Activity
+                  size={28}
+                  className={
+                    health.status === 'good'
+                      ? 'text-green-400'
+                      : health.status === 'warning'
+                        ? 'text-yellow-400'
+                        : 'text-red-400'
+                  }
+                />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Module Status Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {modules.map((mod) => {
-            const config = MODULE_CONFIG[mod];
-            const hasData = !!specs[mod];
-            const spec = specs[mod];
-            
+          {modules.map((module) => {
+            const config = MODULE_CONFIG[module];
+            const isActive = hasModuleData(module, projectId);
+            const entry = entries[module];
+
             return (
               <button
-                key={mod}
-                onClick={() => navigate(`/dashboard/${mod}`)}
+                key={module}
+                onClick={() => navigateWithPublic(`/dashboard/${module}`)}
                 className="group relative p-5 rounded-2xl bg-[#171a21] border border-white/8 hover:border-white/16 transition-all text-left"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className={`w-10 h-10 rounded-xl ${config.bgColor} border border-white/8 flex items-center justify-center`}>
                     <config.icon size={18} className={config.color} />
                   </div>
-                  {hasData ? (
-                    <span className="w-2 h-2 rounded-full bg-green-400" />
-                  ) : (
-                    <span className="w-2 h-2 rounded-full bg-white/20" />
-                  )}
+                  {isActive ? <span className="w-2 h-2 rounded-full bg-green-400" /> : <span className="w-2 h-2 rounded-full bg-white/20" />}
                 </div>
-                <h3 className="text-sm font-display font-semibold text-white mb-1">
-                  {config.label}
-                </h3>
-                <p className="text-xs text-white/40">
-                  {hasData ? 'Data available' : 'No data'}
-                </p>
-                {spec && (
-                  <p className="text-xs text-white/30 mt-2 font-mono">
-                    Updated {format(new Date(spec.lastUpdated), 'MMM d')}
-                  </p>
+                <h3 className="text-sm font-display font-semibold text-white mb-1">{config.label}</h3>
+                <p className="text-xs text-white/40">{isActive ? 'Data available' : 'No data'}</p>
+                {entry?.loadedAt && (
+                  <p className="text-xs text-white/30 mt-2 font-mono">Updated {format(new Date(entry.loadedAt), 'MMM d')}</p>
                 )}
               </button>
             );
           })}
         </div>
 
-        {/* Aggregate KPIs */}
         {aggregateKpis().length > 0 && (
-          <div className="mb-6">
+          <div className="mb-6" ref={keyMetricsRef}>
             <h3 className="text-sm font-display font-semibold text-white/60 uppercase tracking-wider mb-4">
               Key Metrics Across Modules
             </h3>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {aggregateKpis().map((kpi, i) => (
-                <KPICard key={kpi.id} kpi={kpi} index={i} />
+              {aggregateKpis().map((kpi, index) => (
+                <KPICard key={kpi.id} kpi={kpi} index={index} />
               ))}
             </div>
           </div>
         )}
 
-        {/* Recent Uploads / Activity */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Module Details */}
           <div className="bg-[#171a21] border border-white/8 rounded-2xl p-5">
-            <h3 className="text-sm font-display font-semibold text-white/70 mb-4">
-              Module Status
-            </h3>
+            <h3 className="text-sm font-display font-semibold text-white/70 mb-4">Module Status</h3>
             <div className="space-y-3">
-              {modules.map((mod) => {
-                const config = MODULE_CONFIG[mod];
-                const hasData = !!specs[mod];
-                
+              {modules.map((module) => {
+                const config = MODULE_CONFIG[module];
+                const isActive = hasModuleData(module, projectId);
+
                 return (
-                  <div
-                    key={mod}
-                    className="flex items-center justify-between py-2 border-b border-white/4 last:border-none"
-                  >
+                  <div key={module} className="flex items-center justify-between py-2 border-b border-white/4 last:border-none">
                     <div className="flex items-center gap-3">
                       <config.icon size={14} className={config.color} />
                       <span className="text-sm text-white/60">{config.label}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      {!hasData && (
+                      {!isPublicMode && !isActive && (
                         <button
-                          onClick={() => handleLoadDemo(mod)}
+                          onClick={() => handleLoadDemo(module)}
                           className="text-xs text-[#FF6A00] hover:text-[#FF8C38] transition-colors"
                         >
                           Load demo
                         </button>
                       )}
-                      <span className={`text-xs ${hasData ? 'text-green-400' : 'text-white/30'}`}>
-                        {hasData ? 'Active' : 'Inactive'}
+                      <span className={`text-xs ${isActive ? 'text-green-400' : 'text-white/30'}`}>
+                        {isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
                   </div>
@@ -425,18 +504,15 @@ export default function OverviewDashboard() {
             </div>
           </div>
 
-          {/* Quick Actions */}
           <div className="bg-[#171a21] border border-white/8 rounded-2xl p-5">
-            <h3 className="text-sm font-display font-semibold text-white/70 mb-4">
-              Quick Actions
-            </h3>
+            <h3 className="text-sm font-display font-semibold text-white/70 mb-4">Quick Actions</h3>
             <div className="space-y-2">
-              {modules.map((mod) => {
-                const config = MODULE_CONFIG[mod];
+              {modules.map((module) => {
+                const config = MODULE_CONFIG[module];
                 return (
                   <button
-                    key={mod}
-                    onClick={() => navigate(`/dashboard/${mod}`)}
+                    key={module}
+                    onClick={() => navigateWithPublic(`/dashboard/${module}`)}
                     className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/8 transition-colors text-left"
                   >
                     <div className="flex items-center gap-3">
@@ -453,31 +529,29 @@ export default function OverviewDashboard() {
           </div>
         </div>
 
-        {/* All Insights */}
-        {allInsights.length > 0 && (
-          <InsightsPanel insights={allInsights} />
-        )}
+        {allInsights.length > 0 && <InsightsPanel insights={allInsights} />}
 
-        {/* Empty State */}
         {availableModules.length === 0 && (
           <div className="text-center py-12">
             <p className="text-white/40 mb-4">No module data available yet.</p>
-            <div className="flex flex-wrap justify-center gap-3">
-              {modules.map((mod) => (
-                <button
-                  key={mod}
-                  onClick={() => handleLoadDemo(mod)}
-                  className="px-4 py-2 rounded-xl bg-[#171a21] border border-white/10 text-sm text-white/50 hover:text-white hover:border-white/20 transition-all"
-                >
-                  Load {MODULE_CONFIG[mod].label} Demo
-                </button>
-              ))}
-            </div>
+            {!isPublicMode && (
+              <div className="flex flex-wrap justify-center gap-3">
+                {modules.map((module) => (
+                  <button
+                    key={module}
+                    onClick={() => handleLoadDemo(module)}
+                    className="px-4 py-2 rounded-xl bg-[#171a21] border border-white/10 text-sm text-white/50 hover:text-white hover:border-white/20 transition-all"
+                  >
+                    Load {MODULE_CONFIG[module].label} Demo
+                  </button>
+                ))}
+              </div>
+            )}
+            {isPublicMode && <Badge variant="warning">Read-only public view</Badge>}
           </div>
         )}
       </div>
 
-      {/* Chat Button */}
       {!chatOpen && (
         <button
           onClick={() => setChatOpen(true)}
@@ -487,7 +561,6 @@ export default function OverviewDashboard() {
         </button>
       )}
 
-      {/* Chat Panel */}
       {chatOpen && (
         <div className="fixed bottom-6 right-6 w-96 h-[560px] bg-[#171a21] border border-white/10 rounded-3xl shadow-2xl flex flex-col z-50 animate-slide-up overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 bg-[#1c202a]">
@@ -512,21 +585,15 @@ export default function OverviewDashboard() {
             {chatMessages.length === 0 && (
               <div className="text-center py-8">
                 <Bot size={32} className="text-[#FF6A00]/30 mx-auto mb-3" />
-                <p className="text-sm text-white/40">
-                  Ask me about any aspect of your project across all modules.
-                </p>
+                <p className="text-sm text-white/40">Ask about your project across all modules.</p>
               </div>
             )}
+
             {chatMessages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex gap-2.5 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
-              >
+              <div key={msg.id} className={`flex gap-2.5 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
                 <div
                   className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                    msg.role === 'assistant'
-                      ? 'bg-[#FF6A00]/10 border border-[#FF6A00]/20'
-                      : 'bg-white/8'
+                    msg.role === 'assistant' ? 'bg-[#FF6A00]/10 border border-[#FF6A00]/20' : 'bg-white/8'
                   }`}
                 >
                   {msg.role === 'assistant' ? (
@@ -542,15 +609,15 @@ export default function OverviewDashboard() {
                       : 'bg-[#1c202a] border border-white/6'
                   }`}
                 >
-                  {msg.content.split('\n').map((line, i) => (
-                    <p key={i} className="text-sm leading-relaxed text-white/70">
-                      {line.split('**').map((part, idx) =>
-                        idx % 2 === 1 ? (
-                          <strong key={idx} className="text-white">
+                  {msg.content.split('\n').map((line, index) => (
+                    <p key={index} className="text-sm leading-relaxed text-white/70">
+                      {line.split('**').map((part, partIndex) =>
+                        partIndex % 2 === 1 ? (
+                          <strong key={partIndex} className="text-white">
                             {part}
                           </strong>
                         ) : (
-                          <span key={idx}>{part}</span>
+                          <span key={partIndex}>{part}</span>
                         )
                       )}
                     </p>
@@ -558,6 +625,7 @@ export default function OverviewDashboard() {
                 </div>
               </div>
             ))}
+
             {isChatLoading && (
               <div className="flex gap-2.5 items-center">
                 <div className="w-6 h-6 rounded-lg bg-[#FF6A00]/10 border border-[#FF6A00]/20 flex items-center justify-center">
@@ -577,13 +645,13 @@ export default function OverviewDashboard() {
                 'What are the main issues?',
                 'Show overall progress',
                 'Cost status across all modules',
-              ].map((p) => (
+              ].map((prompt) => (
                 <button
-                  key={p}
-                  onClick={() => handleSendMessage(p)}
+                  key={prompt}
+                  onClick={() => void handleSendMessage(prompt)}
                   className="px-2.5 py-1 rounded-lg text-xs bg-white/5 hover:bg-white/8 text-white/50 hover:text-white border border-white/8 transition-colors"
                 >
-                  {p}
+                  {prompt}
                 </button>
               ))}
             </div>
@@ -597,14 +665,14 @@ export default function OverviewDashboard() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    handleSendMessage();
+                    void handleSendMessage();
                   }
                 }}
                 placeholder="Ask about your project..."
                 className="flex-1 bg-transparent text-sm text-white/80 placeholder-white/20 outline-none"
               />
               <button
-                onClick={() => handleSendMessage()}
+                onClick={() => void handleSendMessage()}
                 disabled={!chatInput.trim() || isChatLoading}
                 className="w-7 h-7 rounded-lg bg-[#FF6A00] flex items-center justify-center text-white disabled:opacity-30 hover:bg-[#FF8C38] transition-colors"
               >

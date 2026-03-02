@@ -1,0 +1,275 @@
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import { getDemoSpec } from '../lib/demoData';
+import type { DashboardSpec, Module } from '../types';
+import { useProject } from './ProjectContext';
+
+export type ModuleDataSource = 'demo' | 'upload' | 'remote';
+
+export interface ModuleDataEntry {
+  spec: DashboardSpec;
+  source: ModuleDataSource;
+  loadedAt: string;
+  recordsSample: Record<string, unknown>[];
+}
+
+type ProjectModuleData = Partial<Record<Module, ModuleDataEntry>>;
+type ModuleDataByProject = Record<string, ProjectModuleData>;
+
+interface SetModuleDataArgs {
+  module: Module;
+  spec: DashboardSpec;
+  source: ModuleDataSource;
+  loadedAt?: string;
+  recordsSample?: Record<string, unknown>[];
+}
+
+interface DashboardDataContextType {
+  moduleDataByProject: ModuleDataByProject;
+  setModuleData: (args: SetModuleDataArgs, forProjectId?: string | null) => void;
+  loadDemoModule: (module: Module, forProjectId?: string | null) => void;
+  loadAllDemoModules: (forProjectId?: string | null) => void;
+  clearModuleData: (module: Module, forProjectId?: string | null) => void;
+  clearAllModuleData: (forProjectId?: string | null) => void;
+  getModuleData: (module: Module, forProjectId?: string | null) => ModuleDataEntry | undefined;
+  getProjectModuleData: (forProjectId?: string | null) => ProjectModuleData;
+  hasModuleData: (module: Module, forProjectId?: string | null) => boolean;
+}
+
+const STORAGE_KEY_PREFIX = 'argus.moduleData.';
+const MODULES: Module[] = ['manpower', 'equipment', 'progress', 'cost'];
+
+const DashboardDataContext = createContext<DashboardDataContextType | undefined>(undefined);
+
+function extractRecordsSampleFromSpec(spec: DashboardSpec): Record<string, unknown>[] {
+  const tableVisual = spec.visuals.find((visual) => visual.type === 'table' && visual.data?.length);
+  if (tableVisual?.data) return tableVisual.data.slice(0, 20);
+
+  const firstVisual = spec.visuals.find((visual) => visual.data?.length);
+  if (firstVisual?.data) return firstVisual.data.slice(0, 20);
+
+  return [];
+}
+
+function isValidModuleDataEntry(value: unknown): value is ModuleDataEntry {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as ModuleDataEntry;
+  return Boolean(candidate.spec && candidate.source && candidate.loadedAt);
+}
+
+interface DashboardDataProviderProps {
+  children: ReactNode;
+}
+
+export function DashboardDataProvider({ children }: DashboardDataProviderProps) {
+  const { projectId } = useProject();
+  const [moduleDataByProject, setModuleDataByProject] = useState<ModuleDataByProject>({});
+  const hydratedProjectsRef = useRef<Set<string>>(new Set());
+
+  const persistProjectData = useCallback((targetProjectId: string, data: ProjectModuleData) => {
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}${targetProjectId}`, JSON.stringify(data));
+    } catch (error) {
+      console.error('Failed to persist project module data:', error);
+    }
+  }, []);
+
+  const resolveProjectId = useCallback(
+    (forProjectId?: string | null): string | null => forProjectId || projectId || null,
+    [projectId]
+  );
+
+  const hydrateProjectData = useCallback((targetProjectId: string) => {
+    if (hydratedProjectsRef.current.has(targetProjectId)) return;
+    hydratedProjectsRef.current.add(targetProjectId);
+
+    try {
+      const raw = localStorage.getItem(`${STORAGE_KEY_PREFIX}${targetProjectId}`);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const sanitized: ProjectModuleData = {};
+
+      MODULES.forEach((module) => {
+        const entry = parsed[module];
+        if (isValidModuleDataEntry(entry)) {
+          sanitized[module] = entry;
+        }
+      });
+
+      if (Object.keys(sanitized).length > 0) {
+        setModuleDataByProject((prev) => ({
+          ...prev,
+          [targetProjectId]: sanitized,
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to hydrate project module data:', error);
+      localStorage.removeItem(`${STORAGE_KEY_PREFIX}${targetProjectId}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!projectId) return;
+    hydrateProjectData(projectId);
+  }, [projectId, hydrateProjectData]);
+
+  const setModuleData = useCallback(
+    (args: SetModuleDataArgs, forProjectId?: string | null) => {
+      const targetProjectId = resolveProjectId(forProjectId);
+      if (!targetProjectId) return;
+
+      setModuleDataByProject((prev) => {
+        const previousData = prev[targetProjectId] || {};
+        const nextEntry: ModuleDataEntry = {
+          spec: args.spec,
+          source: args.source,
+          loadedAt: args.loadedAt || new Date().toISOString(),
+          recordsSample: (args.recordsSample || extractRecordsSampleFromSpec(args.spec)).slice(0, 20),
+        };
+
+        const nextProjectData: ProjectModuleData = {
+          ...previousData,
+          [args.module]: nextEntry,
+        };
+
+        persistProjectData(targetProjectId, nextProjectData);
+
+        return {
+          ...prev,
+          [targetProjectId]: nextProjectData,
+        };
+      });
+    },
+    [persistProjectData, resolveProjectId]
+  );
+
+  const loadDemoModule = useCallback(
+    (module: Module, forProjectId?: string | null) => {
+      const spec = getDemoSpec(module);
+      if (!spec) return;
+
+      setModuleData(
+        {
+          module,
+          spec,
+          source: 'demo',
+          loadedAt: new Date().toISOString(),
+          recordsSample: extractRecordsSampleFromSpec(spec),
+        },
+        forProjectId
+      );
+    },
+    [setModuleData]
+  );
+
+  const loadAllDemoModules = useCallback(
+    (forProjectId?: string | null) => {
+      MODULES.forEach((module) => {
+        loadDemoModule(module, forProjectId);
+      });
+    },
+    [loadDemoModule]
+  );
+
+  const clearModuleData = useCallback(
+    (module: Module, forProjectId?: string | null) => {
+      const targetProjectId = resolveProjectId(forProjectId);
+      if (!targetProjectId) return;
+
+      setModuleDataByProject((prev) => {
+        const previousData = prev[targetProjectId] || {};
+        if (!previousData[module]) return prev;
+
+        const nextProjectData = { ...previousData };
+        delete nextProjectData[module];
+        persistProjectData(targetProjectId, nextProjectData);
+
+        return {
+          ...prev,
+          [targetProjectId]: nextProjectData,
+        };
+      });
+    },
+    [persistProjectData, resolveProjectId]
+  );
+
+  const clearAllModuleData = useCallback(
+    (forProjectId?: string | null) => {
+      const targetProjectId = resolveProjectId(forProjectId);
+      if (!targetProjectId) return;
+
+      setModuleDataByProject((prev) => {
+        const next = { ...prev, [targetProjectId]: {} };
+        persistProjectData(targetProjectId, {});
+        return next;
+      });
+    },
+    [persistProjectData, resolveProjectId]
+  );
+
+  const getProjectModuleData = useCallback(
+    (forProjectId?: string | null): ProjectModuleData => {
+      const targetProjectId = resolveProjectId(forProjectId);
+      if (!targetProjectId) return {};
+      return moduleDataByProject[targetProjectId] || {};
+    },
+    [moduleDataByProject, resolveProjectId]
+  );
+
+  const getModuleData = useCallback(
+    (module: Module, forProjectId?: string | null): ModuleDataEntry | undefined => {
+      const projectData = getProjectModuleData(forProjectId);
+      return projectData[module];
+    },
+    [getProjectModuleData]
+  );
+
+  const hasModuleData = useCallback(
+    (module: Module, forProjectId?: string | null): boolean => Boolean(getModuleData(module, forProjectId)),
+    [getModuleData]
+  );
+
+  const value = useMemo<DashboardDataContextType>(
+    () => ({
+      moduleDataByProject,
+      setModuleData,
+      loadDemoModule,
+      loadAllDemoModules,
+      clearModuleData,
+      clearAllModuleData,
+      getModuleData,
+      getProjectModuleData,
+      hasModuleData,
+    }),
+    [
+      moduleDataByProject,
+      setModuleData,
+      loadDemoModule,
+      loadAllDemoModules,
+      clearModuleData,
+      clearAllModuleData,
+      getModuleData,
+      getProjectModuleData,
+      hasModuleData,
+    ]
+  );
+
+  return <DashboardDataContext.Provider value={value}>{children}</DashboardDataContext.Provider>;
+}
+
+export function useDashboardData(): DashboardDataContextType {
+  const context = useContext(DashboardDataContext);
+  if (!context) {
+    throw new Error('useDashboardData must be used within DashboardDataProvider');
+  }
+  return context;
+}

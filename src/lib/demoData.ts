@@ -90,6 +90,19 @@ export const DEMO_EQUIPMENT_SPEC: DashboardSpec = {
       ],
     },
     {
+      id: 'equipment_utilization_timeline', type: 'line', title: 'Equipment Utilization Rate Over Time', xKey: 'date',
+      series: [
+        { key: 'utilization_rate', name: 'Utilization %', color: '#FF6A00' },
+      ],
+      data: [
+        { date: '2024-01-08', utilization_rate: 63.2 },
+        { date: '2024-01-09', utilization_rate: 64.5 },
+        { date: '2024-01-10', utilization_rate: 68.1 },
+        { date: '2024-01-11', utilization_rate: 67.4 },
+        { date: '2024-01-12', utilization_rate: 66.2 },
+      ],
+    },
+    {
       id: 'equipment_table', type: 'table', title: 'Equipment Status Detail',
       columns: [
         { key: 'equipment_id', label: 'Equipment ID' },
@@ -114,7 +127,7 @@ export const DEMO_EQUIPMENT_SPEC: DashboardSpec = {
     'Electrical discipline has highest idle ratio (4 idle out of 11 total).',
     'Civil and Structural are performing closest to optimal utilization.',
   ],
-  meta: { disciplines: ['Civil', 'Mechanical', 'Electrical', 'Structural', 'Piping'], dateMin: '2024-01-12', dateMax: '2024-01-12' },
+  meta: { disciplines: ['Civil', 'Mechanical', 'Electrical', 'Structural', 'Piping'], dateMin: '2024-01-08', dateMax: '2024-01-12' },
   lastUpdated: new Date().toISOString(),
 }
 

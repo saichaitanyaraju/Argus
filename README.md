@@ -16,7 +16,7 @@ Argus is a **Project Visibility Copilot** for construction and oil & gas project
 - **Live Dashboards** — Real-time visualizations for Manpower, Equipment, Progress, and Cost
 - **AI-Powered Q&A** — Ask questions in plain English, get answers from your real data (powered by Lyzr AI)
 - **Multi-Project Support** — Switch between projects with a single click
-- **Deterministic** — No AI hallucinations, answers are grounded in your uploaded data
+- **Structured KPIs** — Metrics are computed from uploaded records
 - **Audit-Ready** — Timestamped records and full data lineage
 
 ## Tech Stack
@@ -120,8 +120,6 @@ LYZR_API_ENDPOINT=https://agent-prod.studio.lyzr.ai/v3/inference/chat/
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your_anon_key
 
-# Supabase (Server-side only)
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ```
 
 ## Deployment
@@ -149,9 +147,8 @@ Add these in Vercel Dashboard > Project Settings > Environment Variables:
 - `LYZR_AGENT_ID`
 - `LYZR_USER_ID`
 - `LYZR_API_ENDPOINT`
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
 
 ## Usage
 
@@ -189,6 +186,7 @@ Send a message to the Lyzr AI agent.
 **Request:**
 ```json
 {
+  "mode": "ask",
   "projectId": "uuid",
   "projectName": "Demo Project",
   "periodDate": "2024-01-15",
@@ -203,6 +201,14 @@ Send a message to the Lyzr AI agent.
 {
   "answer": "The current actual headcount is 221 workers...",
   "raw": { ... }
+}
+```
+
+### POST /api/agent (health check)
+
+```json
+{
+  "mode": "health"
 }
 ```
 

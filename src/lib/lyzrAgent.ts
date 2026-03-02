@@ -1,172 +1,126 @@
-import { supabase } from './supabase';
+﻿import type { DashboardSpec, Module } from '../types';
+
+export type AgentErrorCode =
+  | 'CONFIG_MISSING'
+  | 'AUTH_FAILED'
+  | 'SERVICE_UNAVAILABLE'
+  | 'UPSTREAM_ERROR';
+
+export interface AgentContextPayload {
+  activeModule?: Module | 'overview';
+  filters?: {
+    disciplines: string[];
+    dateFrom: string;
+    dateTo: string;
+  };
+  moduleSpecs?: Partial<Record<Module, DashboardSpec>>;
+  recordsSampleByModule?: Partial<Record<Module, Record<string, unknown>[]>>;
+}
 
 export interface AskLyzrAgentArgs {
   projectId: string;
   projectName: string;
   periodDate: string | null;
-  modules: string[];
-  kpiSnapshots: any[];
-  records: any[];
+  modules: Module[];
   userMessage: string;
   sessionId: string;
+  context?: AgentContextPayload;
 }
 
 export interface LyzrAgentResponse {
   answer: string;
-  raw: any;
+  raw?: unknown;
 }
 
-/**
- * Calls the Lyzr AI Agent with project context and data
- */
-export async function askLyzrAgent(args: AskLyzrAgentArgs): Promise<LyzrAgentResponse> {
-  const {
-    projectId,
-    projectName,
-    periodDate,
-    modules,
-    kpiSnapshots,
-    records,
-    userMessage,
-    sessionId,
-  } = args;
+interface AgentApiErrorPayload {
+  error?: string;
+  errorCode?: AgentErrorCode;
+}
 
-  const apiKey = import.meta.env.VITE_LYZR_API_KEY || import.meta.env.LYZR_API_KEY || '';
-  const agentId = import.meta.env.VITE_LYZR_AGENT_ID || import.meta.env.LYZR_AGENT_ID || '';
-  const userId = import.meta.env.VITE_LYZR_USER_ID || import.meta.env.LYZR_USER_ID || '';
-  const endpoint =
-    import.meta.env.VITE_LYZR_API_ENDPOINT ||
-    import.meta.env.LYZR_API_ENDPOINT ||
-    'https://agent-prod.studio.lyzr.ai/v3/inference/chat/';
+export class AgentProxyError extends Error {
+  code: AgentErrorCode;
+  status: number;
 
-  if (!apiKey || !agentId || !userId) {
-    throw new Error('Missing Lyzr configuration. Set VITE_LYZR_API_KEY, VITE_LYZR_AGENT_ID, and VITE_LYZR_USER_ID.');
+  constructor(message: string, code: AgentErrorCode, status: number) {
+    super(message);
+    this.name = 'AgentProxyError';
+    this.code = code;
+    this.status = status;
   }
+}
 
-  const res = await fetch(endpoint, {
+export async function askLyzrAgent(args: AskLyzrAgentArgs): Promise<LyzrAgentResponse> {
+  const res = await fetch('/api/agent', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': apiKey,
     },
     body: JSON.stringify({
-      user_id: userId,
-      agent_id: agentId,
-      session_id: `${projectId}-${sessionId}`,
-      message: `
-[DATA CONTEXT]
-Project: ${projectName}
-Period: ${periodDate || 'Latest'}
-Module(s): ${modules.join(', ')}
-KPI Snapshots: ${JSON.stringify(kpiSnapshots)}
-Records Sample (first 20 rows): ${JSON.stringify(records.slice(0, 20))}
-[END CONTEXT]
-
-[USER QUESTION]
-${userMessage}
-`,
+      mode: 'ask',
+      ...args,
     }),
   });
 
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`Lyzr API error: ${res.status} - ${errorText}`);
+  const payload = (await res.json().catch(() => ({}))) as LyzrAgentResponse & AgentApiErrorPayload;
+  if (!res.ok || !payload.answer) {
+    throw new AgentProxyError(
+      payload.error || 'Failed to connect to AI service.',
+      payload.errorCode || 'UPSTREAM_ERROR',
+      res.status
+    );
   }
 
-  const data = await res.json();
   return {
-    answer: data.response || data.message || 'No response from agent',
-    raw: data,
+    answer: payload.answer,
+    raw: payload.raw,
   };
 }
 
-/**
- * Fetches KPI snapshots for a project and modules
- */
-export async function fetchKpiSnapshots(projectId: string, modules: string[]): Promise<any[]> {
-  const { data, error } = await supabase
-    .from('kpi_snapshots')
-    .select('*')
-    .eq('project_id', projectId)
-    .in('module', modules)
-    .order('computed_at', { ascending: false })
-    .limit(50);
+export async function checkAgentHealth(): Promise<{
+  ok: boolean;
+  errorCode?: AgentErrorCode;
+  error?: string;
+}> {
+  try {
+    const res = await fetch('/api/agent', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ mode: 'health' }),
+    });
 
-  if (error) {
-    console.error('Error fetching KPI snapshots:', error);
-    return [];
-  }
+    const payload = (await res.json().catch(() => ({}))) as
+      | { ok?: boolean }
+      | (AgentApiErrorPayload & { ok?: boolean });
 
-  return data || [];
-}
+    if (!res.ok || !('ok' in payload) || !payload.ok) {
+      return {
+        ok: false,
+        errorCode: (payload as AgentApiErrorPayload).errorCode || 'SERVICE_UNAVAILABLE',
+        error: (payload as AgentApiErrorPayload).error || 'AI service unavailable.',
+      };
+    }
 
-/**
- * Fetches records from module tables for a project
- */
-export async function fetchModuleRecords(projectId: string, module: string): Promise<any[]> {
-  const tableMap: Record<string, string> = {
-    manpower: 'manpower_records',
-    equipment: 'equipment_records',
-    progress: 'progress_records',
-    cost: 'cost_records',
-  };
-
-  const tableName = tableMap[module];
-  if (!tableName) return [];
-
-  const { data, error } = await supabase
-    .from(tableName)
-    .select('*')
-    .eq('project_id', projectId)
-    .order('created_at', { ascending: false })
-    .limit(100);
-
-  if (error) {
-    console.error(`Error fetching ${module} records:`, error);
-    return [];
-  }
-
-  return data || [];
-}
-
-/**
- * Persists a message to the agent_messages table
- */
-export async function persistAgentMessage(
-  projectId: string,
-  sessionId: string,
-  role: 'user' | 'assistant',
-  content: string,
-  contextModules: string[] = []
-): Promise<void> {
-  const { error } = await supabase.from('agent_messages').insert({
-    project_id: projectId,
-    session_id: sessionId,
-    role,
-    content,
-    context_modules: contextModules,
-  });
-
-  if (error) {
-    console.error('Error persisting agent message:', error);
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      errorCode: 'SERVICE_UNAVAILABLE',
+      error: error instanceof Error ? error.message : 'AI service unavailable.',
+    };
   }
 }
 
-/**
- * Fetches chat history for a session
- */
-export async function fetchChatHistory(projectId: string, sessionId: string): Promise<any[]> {
-  const { data, error } = await supabase
-    .from('agent_messages')
-    .select('*')
-    .eq('project_id', projectId)
-    .eq('session_id', sessionId)
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    console.error('Error fetching chat history:', error);
-    return [];
+export function getAgentFriendlyErrorMessage(errorCode?: AgentErrorCode): string {
+  switch (errorCode) {
+    case 'CONFIG_MISSING':
+    case 'AUTH_FAILED':
+      return 'AI service is temporarily unavailable - check your API key configuration.';
+    case 'SERVICE_UNAVAILABLE':
+      return 'AI service is temporarily unavailable after retries. Please try again shortly.';
+    case 'UPSTREAM_ERROR':
+    default:
+      return 'I apologize, but I am unable to connect to the AI agent right now. Please try again later.';
   }
-
-  return data || [];
 }

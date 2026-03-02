@@ -12,7 +12,6 @@ import {
   LayoutDashboard,
   FolderKanban,
 } from 'lucide-react';
-import { useProject } from '../context/ProjectContext';
 import Navbar from '../components/navbar/Navbar';
 import AIAskBar from '../components/ai/AIAskBar';
 import HowItWorks from '../components/how-it-works/HowItWorks';
@@ -64,14 +63,13 @@ const modules = [
 const features = [
   { icon: Zap, label: 'Instant KPIs', desc: 'Auto-computed on upload' },
   { icon: Eye, label: 'Live Dashboards', desc: 'Spec-driven rendering' },
-  { icon: Shield, label: 'Deterministic', desc: 'No AI hallucinations' },
+  { icon: Shield, label: 'Structured', desc: 'KPIs computed from raw data' },
   { icon: Clock, label: 'Audit-ready', desc: 'Timestamped records' },
   { icon: FolderKanban, label: 'Multi-Project', desc: 'One dashboard' },
 ];
 
 export default function Landing() {
   const navigate = useNavigate();
-  const { project } = useProject();
 
   return (
     <div className="min-h-screen bg-[#0f1117] grid-bg relative overflow-hidden">
