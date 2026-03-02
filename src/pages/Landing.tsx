@@ -21,7 +21,7 @@ const modules = [
   {
     id: 'manpower',
     icon: Users,
-    label: 'Analyze Man Power',
+    label: 'Analyze Manpower',
     desc: 'Headcount tracking, planned vs actual, discipline breakdown, variance analysis.',
     path: '/dashboard/manpower',
     color: 'from-blue-500/10 to-blue-600/5 border-blue-500/20 hover:border-blue-500/40',
@@ -100,7 +100,7 @@ export default function Landing() {
 
             {/* Subtitle - Updated per spec */}
             <p className="text-lg text-white/40 max-w-xl mx-auto leading-relaxed font-body">
-              Your construction site data, turned into decisions — instantly.
+              Your construction site data, turned into decisions - instantly.
             </p>
           </div>
         </section>
@@ -116,7 +116,7 @@ export default function Landing() {
                 >
                   <f.icon size={14} className="text-[#FF6A00]" />
                   <span className="text-sm font-medium text-white/60">{f.label}</span>
-                  <span className="text-xs text-white/25">·</span>
+                  <span className="text-xs text-white/25">�</span>
                   <span className="text-xs text-white/30">{f.desc}</span>
                 </div>
               ))}

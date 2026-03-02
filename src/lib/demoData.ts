@@ -62,7 +62,7 @@ export const DEMO_MANPOWER_SPEC: DashboardSpec = {
     'Overall workforce is 10.9% below planned — consider escalating to subcontractor leads.',
     'Headcount has declined from peak of 215 on Jan 10 — investigate root cause.',
   ],
-  meta: { disciplines: ['Civil', 'Mechanical', 'Electrical', 'Structural', 'Piping', 'Instrumentation'], dateMin: '2024-01-08', dateMax: '2024-01-12' },
+  meta: { disciplines: ['Civil', 'Mechanical', 'Electrical', 'Structural', 'Piping', 'Instrumentation'], dateMin: '2024-01-08', dateMax: '2024-12-01' },
   lastUpdated: new Date().toISOString(),
 }
 

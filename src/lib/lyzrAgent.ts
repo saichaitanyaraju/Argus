@@ -49,7 +49,21 @@ export class AgentProxyError extends Error {
   }
 }
 
+let warnedMissingClientEnv = false;
+
+function warnMissingClientEnv(): void {
+  if (warnedMissingClientEnv) return;
+  if (import.meta.env.VITE_LYZR_API_KEY && import.meta.env.VITE_LYZR_AGENT_ID) return;
+
+  warnedMissingClientEnv = true;
+  console.warn(
+    'VITE_LYZR_API_KEY or VITE_LYZR_AGENT_ID is missing. Ensure server-side LYZR_* vars are set in Vercel.'
+  );
+}
+
 export async function askLyzrAgent(args: AskLyzrAgentArgs): Promise<LyzrAgentResponse> {
+  warnMissingClientEnv();
+
   const res = await fetch('/api/agent', {
     method: 'POST',
     headers: {
@@ -81,6 +95,8 @@ export async function checkAgentHealth(): Promise<{
   errorCode?: AgentErrorCode;
   error?: string;
 }> {
+  warnMissingClientEnv();
+
   try {
     const res = await fetch('/api/agent', {
       method: 'POST',

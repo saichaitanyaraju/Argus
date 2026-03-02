@@ -212,6 +212,20 @@ Send a message to the Lyzr AI agent.
 }
 ```
 
+### GET /api/ai-health
+
+Returns:
+
+```json
+{ "status": "ok" }
+```
+
+or
+
+```json
+{ "status": "down" }
+```
+
 ## Database Schema
 
 ### Tables

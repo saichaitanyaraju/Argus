@@ -14,24 +14,23 @@ import {
   Send,
   Loader2,
   RefreshCw,
+  RotateCcw,
 } from 'lucide-react';
 import { useProject } from '../../context/ProjectContext';
 import { useDashboardData } from '../../context/DashboardDataContext';
 import { supabase } from '../../lib/supabase';
 import { Module, DashboardSpec, ChatMessage, KPI } from '../../types';
-import {
-  askLyzrAgent,
-  AgentProxyError,
-  getAgentFriendlyErrorMessage,
-} from '../../lib/lyzrAgent';
 import KPICard from '../../components/dashboard/KPICard';
 import InsightsPanel from '../../components/dashboard/InsightsPanel';
 import Badge from '../../components/ui/Badge';
 import { format } from 'date-fns';
 import { useToast } from '../../components/ui/ToastHost';
+import { useArgusChat } from '../../hooks/useArgusChat';
+import { usePublicMode } from '../../hooks/usePublicMode';
+import { computeHealthScore } from '../../utils/healthScore';
 
 const MODULE_CONFIG: Record<Module, { label: string; icon: typeof Users; color: string; bgColor: string }> = {
-  manpower: { label: 'Man Power', icon: Users, color: 'text-blue-400', bgColor: 'bg-blue-500/10' },
+  manpower: { label: 'Manpower', icon: Users, color: 'text-blue-400', bgColor: 'bg-blue-500/10' },
   equipment: { label: 'Equipment', icon: Wrench, color: 'text-yellow-400', bgColor: 'bg-yellow-500/10' },
   progress: { label: 'Work Progress', icon: BarChart3, color: 'text-green-400', bgColor: 'bg-green-500/10' },
   cost: { label: 'Cost', icon: DollarSign, color: 'text-[#FF6A00]', bgColor: 'bg-[#FF6A00]/10' },
@@ -42,6 +41,8 @@ export default function OverviewDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { project, projectId, projectName } = useProject();
   const { pushToast } = useToast();
+  const { sendMessage } = useArgusChat();
+  const isPublicMode = usePublicMode();
 
   const {
     getProjectModuleData,
@@ -55,13 +56,14 @@ export default function OverviewDashboard() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [chatError, setChatError] = useState('');
+  const [lastFailedMessage, setLastFailedMessage] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sessionId] = useState(() => `session-${Date.now()}`);
   const autoAskHandledRef = useRef(false);
   const keyMetricsRef = useRef<HTMLDivElement>(null);
 
   const modules: Module[] = ['manpower', 'equipment', 'progress', 'cost'];
-  const isPublicMode = searchParams.get('public') === '1';
 
   const entries = getProjectModuleData(projectId);
   const specs: Partial<Record<Module, DashboardSpec>> = useMemo(() => {
@@ -141,6 +143,7 @@ export default function OverviewDashboard() {
     }
 
     loadAllDemoModules(projectId);
+    loadDemoModule('cost', projectId);
     pushToast('All demo data loaded.', 'success');
     window.setTimeout(() => {
       keyMetricsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -208,6 +211,8 @@ export default function OverviewDashboard() {
     const text = (messageText || chatInput).trim();
     if (!text || isChatLoading || !projectId) return;
 
+    setChatError('');
+
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -219,25 +224,25 @@ export default function OverviewDashboard() {
     setChatInput('');
     setIsChatLoading(true);
 
-    try {
-      const activeModules = modules.filter((module) => Boolean(specs[module]));
-      const response = await askLyzrAgent({
-        projectId,
-        projectName: projectName || 'Demo Project',
-        periodDate: new Date().toISOString().split('T')[0],
-        modules: activeModules.length > 0 ? activeModules : modules,
-        userMessage: text,
-        sessionId,
-        context: {
-          activeModule: 'overview',
-          moduleSpecs: specs,
-          recordsSampleByModule: modules.reduce((acc, module) => {
-            acc[module] = entries[module]?.recordsSample || [];
-            return acc;
-          }, {} as Partial<Record<Module, Record<string, unknown>[]>>),
-        },
-      });
+    const activeModules = modules.filter((module) => Boolean(specs[module]));
+    const response = await sendMessage({
+      projectId,
+      projectName: projectName || 'Demo Project',
+      periodDate: new Date().toISOString().split('T')[0],
+      modules: activeModules.length > 0 ? activeModules : modules,
+      userMessage: text,
+      sessionId,
+      context: {
+        activeModule: 'overview',
+        moduleSpecs: specs,
+        recordsSampleByModule: modules.reduce((acc, module) => {
+          acc[module] = entries[module]?.recordsSample || [];
+          return acc;
+        }, {} as Partial<Record<Module, Record<string, unknown>[]>>),
+      },
+    });
 
+    if (response.ok) {
       const assistantMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -245,43 +250,25 @@ export default function OverviewDashboard() {
         timestamp: new Date(),
       };
       setChatMessages((prev) => [...prev, assistantMsg]);
-    } catch (error) {
-      console.error('Error calling agent:', error);
-      const errorCode = error instanceof AgentProxyError ? error.code : undefined;
+      setLastFailedMessage('');
+    } else {
+      setLastFailedMessage(text);
+      setChatError(response.message);
       const assistantMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: getAgentFriendlyErrorMessage(errorCode),
+        content: response.message,
         timestamp: new Date(),
       };
       setChatMessages((prev) => [...prev, assistantMsg]);
-    } finally {
-      setIsChatLoading(false);
     }
+
+    setIsChatLoading(false);
   };
 
-  const calculateHealthScore = (): { score: number; status: 'good' | 'warning' | 'danger' } => {
-    const availableModules = modules.filter((module) => specs[module]);
-    if (availableModules.length === 0) return { score: 0, status: 'danger' };
-
-    let totalScore = 0;
-    availableModules.forEach((module) => {
-      const spec = specs[module];
-      if (!spec) return;
-
-      const dangerCount = spec.kpis.filter((kpi) => kpi.status === 'danger').length;
-      const warningCount = spec.kpis.filter((kpi) => kpi.status === 'warning').length;
-
-      if (dangerCount === 0 && warningCount === 0) totalScore += 25;
-      else if (dangerCount === 0) totalScore += 15;
-      else totalScore += 5;
-    });
-
-    const score = Math.min(100, totalScore);
-    return {
-      score,
-      status: score >= 80 ? 'good' : score >= 50 ? 'warning' : 'danger',
-    };
+  const handleRetryLastMessage = () => {
+    if (!lastFailedMessage) return;
+    void handleSendMessage(lastFailedMessage);
   };
 
   const aggregateKpis = (): KPI[] => {
@@ -306,7 +293,7 @@ export default function OverviewDashboard() {
     return kpis.slice(0, 4);
   };
 
-  const health = calculateHealthScore();
+  const health = computeHealthScore(specs);
   const availableModules = modules.filter((module) => specs[module]);
   const totalModules = modules.length;
   const allInsights = modules.flatMap((module) => specs[module]?.insights || []).slice(0, 6);
@@ -360,10 +347,39 @@ export default function OverviewDashboard() {
                 : 'bg-white/10 text-white/70 border-white/10 hover:bg-white/20'
             }`}
           >
-            Public Mode
+            Share Public Link
           </button>
         </div>
       </nav>
+
+      <div className="border-b border-white/6 bg-[#171a21]/30 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 flex items-center gap-1 overflow-x-auto">
+          <button
+            onClick={() => navigateWithPublic('/dashboard')}
+            className="relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all whitespace-nowrap text-white"
+          >
+            <LayoutDashboard size={15} className="text-[#FF6A00]" />
+            Overview
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF6A00] rounded-t-full" />
+          </button>
+
+          {modules.map((mod) => {
+            const cfg = MODULE_CONFIG[mod];
+            const hasModData = hasModuleData(mod, projectId);
+            return (
+              <button
+                key={mod}
+                onClick={() => navigateWithPublic(`/dashboard/${mod}`)}
+                className="relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all whitespace-nowrap text-white/40 hover:text-white/70"
+              >
+                <cfg.icon size={15} />
+                {cfg.label}
+                {hasModData && <span className="w-1.5 h-1.5 rounded-full bg-green-400" />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="max-w-7xl mx-auto px-6 py-6">
         {!isPublicMode && (
@@ -400,10 +416,10 @@ export default function OverviewDashboard() {
                 </div>
                 <div className="text-xs text-white/40 uppercase tracking-wider">
                   {health.status === 'good'
-                    ? 'Healthy'
+                    ? 'HEALTHY'
                     : health.status === 'warning'
-                      ? 'Needs Attention'
-                      : 'Critical'}
+                      ? 'AT RISK'
+                      : 'CRITICAL'}
                 </div>
               </div>
               <div
@@ -417,13 +433,13 @@ export default function OverviewDashboard() {
               >
                 <Activity
                   size={28}
-                  className={
+                  className={`${
                     health.status === 'good'
                       ? 'text-green-400'
                       : health.status === 'warning'
                         ? 'text-yellow-400'
                         : 'text-red-400'
-                  }
+                  } ${health.score < 50 ? 'animate-pulse' : ''}`}
                 />
               </div>
             </div>
@@ -634,6 +650,20 @@ export default function OverviewDashboard() {
                 <div className="bg-[#1c202a] border border-white/6 rounded-2xl px-3.5 py-2.5">
                   <Loader2 size={14} className="text-[#FF6A00] animate-spin" />
                 </div>
+              </div>
+            )}
+
+            {chatError && !isChatLoading && (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2">
+                <p className="text-xs text-red-200/90">{chatError}</p>
+                <button
+                  onClick={handleRetryLastMessage}
+                  disabled={!lastFailedMessage}
+                  className="inline-flex items-center gap-1 rounded-lg border border-red-300/30 px-2 py-1 text-xs text-red-200 hover:bg-red-500/20 disabled:opacity-50"
+                >
+                  <RotateCcw size={11} />
+                  Retry
+                </button>
               </div>
             )}
           </div>

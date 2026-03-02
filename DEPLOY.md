@@ -97,6 +97,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 - `POST /api/agent` - Send message to Lyzr AI agent
 - `POST /api/agent` with `{ \"mode\": \"health\" }` - AI connectivity precheck
+- `GET /api/ai-health` - Lightweight AI online/offline status for UI indicators
 
 ## Troubleshooting
 

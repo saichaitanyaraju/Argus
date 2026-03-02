@@ -1,4 +1,5 @@
 import { DashboardSpec, Module } from '../types';
+import { toIsoDate } from '../utils/dateParser';
 
 type AnyRow = Record<string, unknown>;
 
@@ -13,19 +14,7 @@ function toNumber(...values: unknown[]): number {
 }
 
 function normalizeDate(value: unknown): string {
-  if (!value) return '';
-  const raw = String(value).trim();
-  if (!raw) return '';
-  const date = new Date(raw);
-  if (!Number.isNaN(date.getTime())) {
-    return date.toISOString().split('T')[0];
-  }
-  const yyyyMmDd = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
-  if (yyyyMmDd) {
-    const [, y, m, d] = yyyyMmDd;
-    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-  }
-  return raw;
+  return toIsoDate(value);
 }
 
 function normalizeDiscipline(value: unknown): string {

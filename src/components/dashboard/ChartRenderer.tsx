@@ -1,8 +1,10 @@
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer, Cell
+  Legend, ResponsiveContainer
 } from 'recharts'
 import { Visual } from '../../types'
+import { format } from 'date-fns'
+import { sortByIsoDate, toIsoDate } from '../../utils/dateParser'
 
 interface Props {
   visual: Visual
@@ -35,8 +37,20 @@ export default function ChartRenderer({ visual }: Props) {
     </div>
   )
 
+  const isDateAxis = Boolean(xKey && String(xKey).toLowerCase().includes('date'))
+  const chartData =
+    type === 'line' && xKey && isDateAxis ? sortByIsoDate(data, xKey) : data
+
+  const tickFormatter = isDateAxis
+    ? (value: string | number) => {
+        const iso = toIsoDate(value)
+        if (!iso) return String(value)
+        return format(new Date(iso), 'MMM d')
+      }
+    : undefined
+
   const commonProps = {
-    data,
+    data: chartData,
     margin: { top: 8, right: 8, left: -16, bottom: 0 },
   }
 
@@ -45,7 +59,11 @@ export default function ChartRenderer({ visual }: Props) {
       <ResponsiveContainer width="100%" height={220}>
         <LineChart {...commonProps}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-          <XAxis dataKey={xKey} tick={{ fontSize: 11, fill: '#666', fontFamily: 'DM Sans' }} />
+          <XAxis
+            dataKey={xKey}
+            tick={{ fontSize: 11, fill: '#666', fontFamily: 'DM Sans' }}
+            tickFormatter={tickFormatter}
+          />
           <YAxis tick={{ fontSize: 11, fill: '#666', fontFamily: 'DM Sans' }} />
           <Tooltip content={<CustomTooltip />} />
           <Legend wrapperStyle={{ fontSize: 12, fontFamily: 'DM Sans', color: '#aaa' }} />

@@ -24,7 +24,7 @@ interface LyzrCallResult {
 
 const LYZR_API_KEY = process.env.LYZR_API_KEY || '';
 const LYZR_AGENT_ID = process.env.LYZR_AGENT_ID || '';
-const LYZR_USER_ID = process.env.LYZR_USER_ID || '';
+const LYZR_USER_ID = process.env.LYZR_USER_ID || 'argus-system';
 const LYZR_API_ENDPOINT =
   process.env.LYZR_API_ENDPOINT || 'https://agent-prod.studio.lyzr.ai/v3/inference/chat/';
 
@@ -33,7 +33,7 @@ const RETRY_DELAY_MS = 2000;
 const REQUEST_TIMEOUT_MS = 20000;
 
 function hasRequiredConfig(): boolean {
-  return Boolean(LYZR_API_KEY && LYZR_AGENT_ID && LYZR_USER_ID && LYZR_API_ENDPOINT);
+  return Boolean(LYZR_API_KEY && LYZR_AGENT_ID && LYZR_API_ENDPOINT);
 }
 
 function sleep(ms: number): Promise<void> {

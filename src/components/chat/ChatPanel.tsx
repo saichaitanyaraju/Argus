@@ -60,7 +60,7 @@ function deterministic_agent(question: string, spec?: DashboardSpec, module?: Mo
     return { message: `**Current Issues:**\n\n${spec.insights.map((s, i) => `${i + 1}. ${s}`).join('\n')}` }
   }
   if (q.includes('export') || q.includes('report') || q.includes('download')) {
-    return { message: 'Use the **Export Report** button in the top-right of the dashboard to download a PDF or CSV report.' }
+    return { message: 'Use the **Export CSV** button in the top-right of the dashboard to download a report.' }
   }
   const k = spec.kpis[0]
   return { message: k ? `**${k.label}**: ${k.value}${k.delta ? ` (${k.delta})` : ''}.\n\nTry: "summarize", "what\'s the cost variance?", "show discipline breakdown".` : 'No data available.' }

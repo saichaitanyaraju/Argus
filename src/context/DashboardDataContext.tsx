@@ -46,6 +46,8 @@ interface DashboardDataContextType {
 
 const STORAGE_KEY_PREFIX = 'argus.moduleData.';
 const MODULES: Module[] = ['manpower', 'equipment', 'progress', 'cost'];
+const COST_DEFAULT_START = '2024-01-08';
+const COST_DEFAULT_END = '2024-12-01';
 
 const DashboardDataContext = createContext<DashboardDataContextType | undefined>(undefined);
 
@@ -63,6 +65,19 @@ function isValidModuleDataEntry(value: unknown): value is ModuleDataEntry {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as ModuleDataEntry;
   return Boolean(candidate.spec && candidate.source && candidate.loadedAt);
+}
+
+function withCostDateFallback(module: Module, spec: DashboardSpec): DashboardSpec {
+  if (module !== 'cost') return spec;
+
+  return {
+    ...spec,
+    meta: {
+      ...spec.meta,
+      dateMin: spec.meta.dateMin || COST_DEFAULT_START,
+      dateMax: spec.meta.dateMax || COST_DEFAULT_END,
+    },
+  };
 }
 
 interface DashboardDataProviderProps {
@@ -130,7 +145,7 @@ export function DashboardDataProvider({ children }: DashboardDataProviderProps) 
       setModuleDataByProject((prev) => {
         const previousData = prev[targetProjectId] || {};
         const nextEntry: ModuleDataEntry = {
-          spec: args.spec,
+          spec: withCostDateFallback(args.module, args.spec),
           source: args.source,
           loadedAt: args.loadedAt || new Date().toISOString(),
           recordsSample: (args.recordsSample || extractRecordsSampleFromSpec(args.spec)).slice(0, 20),

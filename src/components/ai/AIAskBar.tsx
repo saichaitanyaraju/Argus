@@ -1,8 +1,9 @@
-﻿import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Command, Loader2 } from 'lucide-react';
+import { Sparkles, Loader2, RotateCcw } from 'lucide-react';
 import { AI_PLACEHOLDER_PHRASES, useTypewriterPlaceholder } from './TypewriterPlaceholder';
 import { checkAgentHealth, getAgentFriendlyErrorMessage } from '../../lib/lyzrAgent';
+import { useAIHealth } from '../../hooks/useAIHealth';
 
 interface AIAskBarProps {
   autoFocus?: boolean;
@@ -23,19 +24,23 @@ export default function AIAskBar({ autoFocus = false, initialValue = '', onSubmi
   const [isFocused, setIsFocused] = useState(false);
   const [isCheckingHealth, setIsCheckingHealth] = useState(false);
   const [healthError, setHealthError] = useState('');
+  const [isMac, setIsMac] = useState(false);
+  const { status: aiStatus, isOnline, refresh: refreshAIHealth } = useAIHealth();
 
   const placeholderText = useTypewriterPlaceholder(AI_PLACEHOLDER_PHRASES, 50, 2000);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    setIsMac(navigator.platform.toUpperCase().includes('MAC'));
+
+    const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         inputRef.current?.focus();
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, []);
 
   useEffect(() => {
@@ -58,6 +63,7 @@ export default function AIAskBar({ autoFocus = false, initialValue = '', onSubmi
 
     const health = await checkAgentHealth();
     setIsCheckingHealth(false);
+    void refreshAIHealth();
 
     if (!health.ok) {
       setHealthError(getAgentFriendlyErrorMessage(health.errorCode));
@@ -65,7 +71,7 @@ export default function AIAskBar({ autoFocus = false, initialValue = '', onSubmi
     }
 
     navigate(`/dashboard?q=${encodeURIComponent(trimmedQuestion)}&autoask=true`);
-  }, [question, navigate, onSubmit, isCheckingHealth]);
+  }, [question, navigate, onSubmit, isCheckingHealth, refreshAIHealth]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -95,6 +101,17 @@ export default function AIAskBar({ autoFocus = false, initialValue = '', onSubmi
           />
         </div>
 
+        <div className="hidden md:flex items-center gap-2 text-xs font-mono">
+          <span
+            className={`w-2 h-2 rounded-full ${
+              isOnline ? 'bg-green-400' : aiStatus === 'checking' ? 'bg-yellow-400' : 'bg-red-400'
+            }`}
+          />
+          <span className={isOnline ? 'text-green-300/90' : 'text-red-300/90'}>
+            {isOnline ? 'AI Online' : aiStatus === 'checking' ? 'Checking AI...' : 'AI Offline'}
+          </span>
+        </div>
+
         <input
           ref={inputRef}
           type="text"
@@ -115,8 +132,7 @@ export default function AIAskBar({ autoFocus = false, initialValue = '', onSubmi
             onClick={() => inputRef.current?.focus()}
             className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-white/40 text-xs hover:bg-white/10 hover:text-white/60 transition-colors"
           >
-            <Command size={10} />
-            <span>K</span>
+            <span>{isMac ? '\u2318K' : 'Ctrl+K'}</span>
           </button>
 
           <button
@@ -132,7 +148,7 @@ export default function AIAskBar({ autoFocus = false, initialValue = '', onSubmi
             ) : (
               <>
                 Ask Argus
-                <span className="text-xs">→</span>
+                <span className="text-xs">-&gt;</span>
               </>
             )}
           </button>
@@ -151,7 +167,18 @@ export default function AIAskBar({ autoFocus = false, initialValue = '', onSubmi
         ))}
       </div>
 
-      {healthError && <p className="mt-3 text-center text-xs text-red-300/90">{healthError}</p>}
+      {healthError && (
+        <div className="mt-3 flex items-center justify-center gap-3 text-xs">
+          <p className="text-red-300/90">{healthError}</p>
+          <button
+            onClick={() => void handleSubmit()}
+            className="inline-flex items-center gap-1 rounded-lg border border-red-400/30 bg-red-500/10 px-2.5 py-1 text-red-300 hover:bg-red-500/20 transition-colors"
+          >
+            <RotateCcw size={11} />
+            Retry
+          </button>
+        </div>
+      )}
     </div>
   );
 }

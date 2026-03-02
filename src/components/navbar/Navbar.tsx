@@ -41,6 +41,7 @@ export default function Navbar({ variant = 'landing' }: NavbarProps) {
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectCode, setNewProjectCode] = useState('');
   const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [createError, setCreateError] = useState('');
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -64,10 +65,11 @@ export default function Navbar({ variant = 'landing' }: NavbarProps) {
 
   const handleCreateProject = useCallback(async () => {
     if (!newProjectName.trim()) {
-      pushToast('Project name is required.', 'warning');
+      setCreateError('Project name is required.');
       return;
     }
 
+    setCreateError('');
     setIsCreatingProject(true);
     const created = await createProject({
       name: newProjectName,
@@ -82,6 +84,7 @@ export default function Navbar({ variant = 'landing' }: NavbarProps) {
 
     setNewProjectName('');
     setNewProjectCode('');
+    setCreateError('');
     setIsCreateModalOpen(false);
     setIsProjectDropdownOpen(false);
     pushToast('Project created and selected.', 'success');
@@ -166,6 +169,7 @@ export default function Navbar({ variant = 'landing' }: NavbarProps) {
                       <button
                         onClick={() => {
                           setIsCreateModalOpen(true);
+                          setCreateError('');
                           setIsProjectDropdownOpen(false);
                         }}
                         className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm text-[#FF6A00] hover:text-[#FF8C38] bg-[#FF6A00]/10 border border-[#FF6A00]/20 transition-colors"
@@ -242,7 +246,10 @@ export default function Navbar({ variant = 'landing' }: NavbarProps) {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-display font-semibold text-white">Create New Project</h3>
               <button
-                onClick={() => setIsCreateModalOpen(false)}
+                onClick={() => {
+                  setCreateError('');
+                  setIsCreateModalOpen(false);
+                }}
                 className="w-8 h-8 rounded-lg hover:bg-white/8 text-white/50 hover:text-white flex items-center justify-center"
               >
                 <X size={16} />
@@ -254,10 +261,14 @@ export default function Navbar({ variant = 'landing' }: NavbarProps) {
                 <label className="block text-xs text-white/50 mb-1">Project Name</label>
                 <input
                   value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
+                  onChange={(e) => {
+                    setNewProjectName(e.target.value);
+                    if (createError) setCreateError('');
+                  }}
                   placeholder="e.g. West Yard Expansion"
                   className="w-full px-3 py-2 rounded-xl bg-[#0f1117] border border-white/10 text-white/80 placeholder-white/30 outline-none focus:border-[#FF6A00]/40"
                 />
+                {createError && <p className="text-red-400 text-sm mt-1">{createError}</p>}
               </div>
               <div>
                 <label className="block text-xs text-white/50 mb-1">Project Code (optional)</label>
