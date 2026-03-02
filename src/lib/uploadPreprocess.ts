@@ -1,6 +1,6 @@
 import type { Module } from '../types';
 
-export interface UploadProfile {
+export interface UploadProfile extends Record<string, unknown> {
   rowCount: number;
   dateMin: string;
   dateMax: string;
