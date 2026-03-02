@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo, type ComponentType } from 'react';
+﻿import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -44,8 +44,6 @@ const MODULE_CONFIG: Record<Module, { label: string; icon: typeof Users; color: 
 interface DashboardLayoutProps {
   module: Module;
   label: string;
-  icon: ComponentType<{ size?: number; className?: string }>;
-  iconColor: string;
 }
 
 function normalizeDateValue(value: unknown): string {
@@ -656,3 +654,4 @@ export default function DashboardLayout({ module, label }: DashboardLayoutProps)
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-import { CloudUpload, Zap, MessageCircle, ArrowRight } from 'lucide-react';
+import { Upload, Zap, MessageCircle, ArrowRight } from 'lucide-react';
 
 interface StepCardProps {
   number: string;
@@ -36,7 +36,7 @@ export default function HowItWorks() {
   const steps = [
     {
       number: '01',
-      icon: CloudUpload,
+      icon: Upload,
       title: 'Upload',
       lines: ['Drop your site Excel.', 'Any format. Any column names. Any sheets.'],
     },
