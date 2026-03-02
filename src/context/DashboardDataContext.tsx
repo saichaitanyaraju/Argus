@@ -10,6 +10,7 @@ import React, {
 } from 'react';
 import { getDemoSpec } from '../lib/demoData';
 import type { DashboardSpec, Module } from '../types';
+import { hasDashboardData } from '../utils/dashboardData';
 import { useProject } from './ProjectContext';
 
 export type ModuleDataSource = 'demo' | 'upload' | 'remote';
@@ -270,7 +271,10 @@ export function DashboardDataProvider({ children }: DashboardDataProviderProps) 
   );
 
   const hasModuleData = useCallback(
-    (module: Module, forProjectId?: string | null): boolean => Boolean(getModuleData(module, forProjectId)),
+    (module: Module, forProjectId?: string | null): boolean => {
+      const entry = getModuleData(module, forProjectId);
+      return hasDashboardData(entry?.spec, entry?.recordsSample);
+    },
     [getModuleData]
   );
 

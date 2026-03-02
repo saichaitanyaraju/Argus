@@ -27,6 +27,7 @@ import { format } from 'date-fns';
 import { useToast } from '../../components/ui/ToastHost';
 import { useArgusChat } from '../../hooks/useArgusChat';
 import { usePublicMode } from '../../hooks/usePublicMode';
+import { hasDashboardData } from '../../utils/dashboardData';
 import { computeHealthScore } from '../../utils/healthScore';
 
 const MODULE_CONFIG: Record<Module, { label: string; icon: typeof Users; color: string; bgColor: string }> = {
@@ -49,6 +50,7 @@ export default function OverviewDashboard() {
     hasModuleData,
     setModuleData,
     loadDemoModule,
+    loadAllDemoModules,
   } = useDashboardData();
 
   const [chatOpen, setChatOpen] = useState(false);
@@ -69,8 +71,9 @@ export default function OverviewDashboard() {
   const specs: Partial<Record<Module, DashboardSpec>> = useMemo(() => {
     const next: Partial<Record<Module, DashboardSpec>> = {};
     modules.forEach((module) => {
-      if (entries[module]?.spec) {
-        next[module] = entries[module]!.spec;
+      const entry = entries[module];
+      if (entry?.spec && hasDashboardData(entry.spec, entry.recordsSample)) {
+        next[module] = entry.spec;
       }
     });
     return next;
@@ -86,11 +89,12 @@ export default function OverviewDashboard() {
           const { data } = await supabase.functions.invoke('get-dashboard', {
             body: { module, project_id: projectId },
           });
-          if (data?.spec) {
+          const remoteSpec = data?.spec as DashboardSpec | undefined;
+          if (remoteSpec && hasDashboardData(remoteSpec)) {
             setModuleData(
               {
                 module,
-                spec: data.spec as DashboardSpec,
+                spec: remoteSpec,
                 source: 'remote',
                 recordsSample: [],
               },
@@ -142,10 +146,7 @@ export default function OverviewDashboard() {
       return;
     }
 
-    loadDemoModule('manpower', projectId);
-    loadDemoModule('equipment', projectId);
-    loadDemoModule('progress', projectId);
-    loadDemoModule('cost', projectId);
+    loadAllDemoModules(projectId);
     pushToast('All demo data loaded.', 'success');
     window.setTimeout(() => {
       keyMetricsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -345,14 +346,16 @@ export default function OverviewDashboard() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#171a21] hover:bg-[#1c202a] border border-white/10 rounded-xl text-xs text-white/60 hover:text-white transition-all"
-          >
-            <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
-            Refresh
-          </button>
+          {!isPublicMode && (
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#171a21] hover:bg-[#1c202a] border border-white/10 rounded-xl text-xs text-white/60 hover:text-white transition-all"
+            >
+              <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+          )}
 
           <button
             onClick={() => void handlePublicModeToggle()}
@@ -367,6 +370,12 @@ export default function OverviewDashboard() {
           </button>
         </div>
       </nav>
+
+      {isPublicMode && (
+        <div className="px-6 py-2.5 border-b border-green-500/20 bg-green-500/10 text-green-200 text-sm font-medium">
+          {'\u{1F441} Public View - Read Only'}
+        </div>
+      )}
 
       <div className="border-b border-white/6 bg-[#171a21]/30 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-6 flex items-center gap-1 overflow-x-auto">
@@ -482,7 +491,7 @@ export default function OverviewDashboard() {
                 </div>
                 <h3 className="text-sm font-display font-semibold text-white mb-1">{config.label}</h3>
                 <p className="text-xs text-white/40">{isActive ? 'Data available' : 'No data'}</p>
-                {entry?.loadedAt && (
+                {isActive && entry?.loadedAt && (
                   <p className="text-xs text-white/30 mt-2 font-mono">Updated {format(new Date(entry.loadedAt), 'MMM d')}</p>
                 )}
               </button>

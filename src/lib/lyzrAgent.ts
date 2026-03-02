@@ -105,6 +105,33 @@ export async function checkAgentHealth(): Promise<{
   errorCode?: AgentErrorCode;
   error?: string;
 }> {
+  // Try lightweight health endpoint first (if deployed), then fall back to /api/agent mode=health.
+  try {
+    const healthRes = await fetch('/api/ai-health', {
+      method: 'GET',
+      cache: 'no-store',
+    });
+
+    const healthPayload = (await healthRes.json().catch(() => ({}))) as {
+      status?: 'ok' | 'down';
+      error?: string;
+    };
+
+    if (healthRes.ok && healthPayload.status === 'ok') {
+      return { ok: true };
+    }
+
+    if (healthRes.ok && healthPayload.status === 'down') {
+      return {
+        ok: false,
+        errorCode: 'SERVICE_UNAVAILABLE',
+        error: healthPayload.error || 'AI service unavailable.',
+      };
+    }
+  } catch (error) {
+    console.warn('[ArgusAI] /api/ai-health check failed, falling back to /api/agent health.', error);
+  }
+
   try {
     const res = await fetch('/api/agent', {
       method: 'POST',

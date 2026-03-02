@@ -13,7 +13,23 @@ export function useAIHealth(pollMs = 45000) {
     try {
       const res = await fetch('/api/ai-health', { cache: 'no-store' });
       const payload = (await res.json().catch(() => ({}))) as Partial<AIHealthResponse>;
-      setStatus(res.ok && payload.status === 'ok' ? 'ok' : 'down');
+
+      if (res.ok && payload.status === 'ok') {
+        setStatus('ok');
+        return;
+      }
+    } catch {
+      // Fall through to /api/agent health check.
+    }
+
+    try {
+      const res = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'health' }),
+      });
+      const payload = (await res.json().catch(() => ({}))) as { ok?: boolean };
+      setStatus(res.ok && payload.ok ? 'ok' : 'down');
     } catch {
       setStatus('down');
     }

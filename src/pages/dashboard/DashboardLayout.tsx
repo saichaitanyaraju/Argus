@@ -32,6 +32,7 @@ import { exportModuleCsv } from '../../lib/exportReport';
 import { useToast } from '../../components/ui/ToastHost';
 import { useArgusChat } from '../../hooks/useArgusChat';
 import { usePublicMode } from '../../hooks/usePublicMode';
+import { hasDashboardData } from '../../utils/dashboardData';
 import { toIsoDate } from '../../utils/dateParser';
 import Skeleton from '../../components/ui/Skeleton';
 
@@ -106,11 +107,7 @@ export default function DashboardLayout({ module, label }: DashboardLayoutProps)
 
   const currentEntry = getModuleData(module, projectId);
   const currentSpec = currentEntry?.spec;
-  const hasData = Boolean(
-    currentSpec &&
-      (((currentEntry?.recordsSample?.length || 0) > 0) ||
-        currentSpec.visuals.some((visual) => (visual.data?.length || 0) > 0))
-  );
+  const hasData = hasDashboardData(currentSpec, currentEntry?.recordsSample);
 
   useEffect(() => {
     if (!projectId || hasData) return;
@@ -125,11 +122,13 @@ export default function DashboardLayout({ module, label }: DashboardLayoutProps)
         });
 
         if (cancelled || !data?.spec) return;
+        const remoteSpec = data.spec as DashboardSpec;
+        if (!hasDashboardData(remoteSpec)) return;
 
         setModuleData(
           {
             module,
-            spec: data.spec as DashboardSpec,
+            spec: remoteSpec,
             source: 'remote',
             recordsSample: [],
           },
