@@ -1,7 +1,8 @@
-﻿import { useState, useRef, useCallback, type DragEvent, type ChangeEvent } from 'react';
+import { useState, useRef, useCallback, type DragEvent, type ChangeEvent } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, X, Lock } from 'lucide-react';
 import { Module, UploadState, DashboardSpec } from '../../types';
 import { buildDashboardSpec } from '../../lib/specBuilders';
+import { toIsoDate } from '../../utils/dateParser';
 
 interface Props {
   module: Module;
@@ -16,42 +17,74 @@ const moduleLabels: Record<Module, string> = {
   cost: 'Cost',
 };
 
+const SHEET_SCAN_ROWS = 80;
+const MAX_DATA_ROWS = 10000;
+
+const moduleSheetHints: Record<Module, string[]> = {
+  manpower: ['manpower', 'mp', 'summary', 'present', 'designation', 'department'],
+  equipment: ['equipment', 'vehicle', 'breakdown', 'idle', 'demob', 'list'],
+  progress: ['progress', 'daily', 'qty', 'commodity', 'discipline', 'package'],
+  cost: ['cost', 'summary', 'lpo', 'expense', 'report', 'payment'],
+};
+
 const columnSynonyms: Record<string, string[]> = {
   planned_count: ['planned', 'plan', 'target', 'budget', 'required', 'planned_headcount', 'planned headcount'],
   actual_count: ['actual', 'act', 'current', 'present', 'on_site', 'onsite', 'actual_headcount', 'actual headcount'],
-  discipline: ['discipline', 'trade', 'category', 'dept', 'department', 'crew', 'team'],
-  company: ['company', 'contractor', 'vendor', 'subcontractor', 'firm', 'org'],
+  discipline: ['discipline', 'trade', 'dept', 'department', 'crew', 'team', 'trade for dpr'],
+  company: ['company', 'contractor', 'vendor', 'subcontractor', 'firm', 'org', 'supplier company', 'supplier name'],
   nationality: ['nationality', 'national', 'country', 'origin'],
 
-  equipment_type: ['type', 'equipment_type', 'equipment type', 'category', 'model'],
-  equipment_id: ['id', 'equipment_id', 'equipment id', 'tag', 'tag_no', 'tag number', 'asset_id'],
-  status: ['status', 'state', 'condition', 'availability'],
+  equipment_type: ['type', 'equipment_type', 'equipment type', 'category', 'model', 'type of vehicle'],
+  equipment_id: ['id', 'equipment_id', 'equipment id', 'tag', 'tag_no', 'tag number', 'asset_id', 'plate no', 'reg no'],
+  status: ['status', 'state', 'condition', 'availability', 'equipment working status'],
   idle_count: ['idle', 'standby', 'waiting', 'available'],
   breakdown_count: ['breakdown', 'broken', 'repair', 'maintenance', 'down'],
   utilisation_rate: ['utilisation', 'utilization', 'usage', 'efficiency', 'productivity'],
-  hours_idle: ['hours_idle', 'idle_hours', 'idle hrs'],
+  hours_idle: ['hours_idle', 'idle_hours', 'idle hrs', 'total monthly hours'],
+  location: ['location', 'package', 'project/package', 'project package'],
 
   activity_id: ['activity_id', 'activity id', 'task_id', 'task id', 'id', 'code'],
   activity_name: ['activity', 'activity_name', 'activity name', 'task', 'task_name', 'description', 'name'],
   wbs_code: ['wbs', 'wbs_code', 'wbs code', 'work_breakdown', 'breakdown'],
-  planned_progress: ['planned_progress', 'planned progress', 'planned_pct', 'target_progress', 'baseline'],
-  actual_progress: ['actual_progress', 'actual progress', 'actual_pct', 'current_progress', 'achieved'],
+  planned_progress: ['planned_progress', 'planned progress', 'planned_pct', 'target_progress', 'baseline', 'planned qty', 'scope', 'target'],
+  actual_progress: ['actual_progress', 'actual progress', 'actual_pct', 'current_progress', 'achieved', 'executed qty', 'total achieved', 'monthly achieved', 'today achieved'],
   weight: ['weight', 'weighted', 'priority', 'importance'],
 
   cost_code: ['cost_code', 'cost code', 'code', 'account', 'gl_code', 'wbs'],
   description: ['description', 'desc', 'item', 'name', 'narrative'],
-  category: ['category', 'type', 'class', 'group', 'classification'],
-  budget_amount: ['budget', 'planned', 'approved', 'authorized', 'baseline'],
+  category: ['category', 'type', 'class', 'group', 'classification', 'particulars'],
+  budget_amount: ['budget', 'planned', 'approved', 'authorized', 'baseline', 'lpo amount', 'amount', 'total'],
   committed_amount: ['committed', 'commitment', 'po', 'order', 'contracted'],
-  actual_amount: ['actual', 'spent', 'paid', 'invoiced', 'incurred', 'actual_spend'],
+  actual_amount: ['actual', 'spent', 'paid', 'invoiced', 'incurred', 'actual_spend', 'lpo amount', 'amount', 'total'],
   forecast_amount: ['forecast', 'projected', 'estimate', 'prediction', 'eac'],
   currency: ['currency', 'curr', 'ccy'],
-  date: ['date', 'day', 'period_date', 'period date'],
+  date: ['date', 'day', 'period_date', 'period date', 'mob date', 'delivery-production confirmed date', 'delivery confirmed date', 'cheque-payment date'],
   timestamp: ['timestamp', 'time', 'datetime', 'date_time'],
 };
 
 function normalizeHeader(header: string): string {
   return header.toLowerCase().trim().replace(/[_\s-]+/g, '_');
+}
+
+function cleanCell(value: unknown): string {
+  return String(value ?? '').replace(/\r|\n/g, ' ').trim();
+}
+
+function extractIsoDateFromText(value: unknown): string {
+  const text = cleanCell(value);
+  if (!text) return '';
+
+  const direct = toIsoDate(text);
+  if (direct) return direct;
+
+  const dayMonthYear = text.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
+  if (dayMonthYear) {
+    const [, d, m, yRaw] = dayMonthYear;
+    const y = yRaw.length === 2 ? `20${yRaw}` : yRaw;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+
+  return '';
 }
 
 function matchColumn(header: string): string | null {
@@ -79,6 +112,37 @@ function buildColumnMap(headers: string[]): Record<string, string> {
   return map;
 }
 
+function headerMatchScore(headers: string[]): number {
+  return headers.reduce((score, header) => {
+    return score + (matchColumn(header) ? 1 : 0);
+  }, 0);
+}
+
+function sheetHintScore(module: Module, sheetName: string): number {
+  const normalized = normalizeHeader(sheetName);
+  return moduleSheetHints[module].reduce((score, hint) => {
+    return score + (normalized.includes(normalizeHeader(hint)) ? 1 : 0);
+  }, 0);
+}
+
+function detectHeaderRow(rows: unknown[][]): { index: number; score: number } | null {
+  let best: { index: number; score: number } | null = null;
+  const scanLimit = Math.min(rows.length, SHEET_SCAN_ROWS);
+
+  for (let idx = 0; idx < scanLimit; idx += 1) {
+    const candidate = rows[idx].map((cell) => cleanCell(cell)).filter(Boolean);
+    if (candidate.length < 3) continue;
+
+    const score = headerMatchScore(candidate);
+    if (!best || score > best.score) {
+      best = { index: idx, score };
+    }
+  }
+
+  if (!best || best.score < 2) return null;
+  return best;
+}
+
 function coerceValue(value: unknown): unknown {
   if (value === null || value === undefined) return '';
   if (typeof value === 'number') return Number.isFinite(value) ? value : '';
@@ -86,11 +150,20 @@ function coerceValue(value: unknown): unknown {
   return value;
 }
 
+function firstNonEmpty(...values: unknown[]): unknown {
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue;
+    return value;
+  }
+  return '';
+}
+
 function mapRows(
   module: Module,
   headers: string[],
   rows: unknown[][],
-  columnMap: Record<string, string>
+  columnMap: Record<string, string>,
+  contextDate: string
 ): Record<string, unknown>[] {
   return rows
     .map((row) => {
@@ -113,14 +186,66 @@ function mapRows(
       if (!mapped.actual_count && mapped.actual_headcount) mapped.actual_count = mapped.actual_headcount;
       if (!mapped.planned_count && mapped.planned_headcount) mapped.planned_count = mapped.planned_headcount;
 
+      if (module === 'manpower') {
+        mapped.discipline = firstNonEmpty(
+          mapped.discipline,
+          mapped.trade_for_dpr,
+          mapped.standard_trade,
+          mapped.actual_trade,
+          mapped.present_designation,
+          mapped.department,
+          mapped.category,
+          'General'
+        );
+
+        if (!mapped.actual_count && mapped.physical_presence) {
+          const presence = String(mapped.physical_presence).toLowerCase();
+          mapped.actual_count = presence.includes('present') ? 1 : 0;
+        }
+        if (!mapped.planned_count && mapped.actual_count) mapped.planned_count = mapped.actual_count;
+      }
+
+      if (module === 'equipment') {
+        mapped.equipment_id = firstNonEmpty(mapped.equipment_id, mapped.plate_no, mapped.reg_no, mapped.asset_code, mapped.id);
+        mapped.discipline = firstNonEmpty(mapped.discipline, mapped.location, mapped.department, 'General');
+        mapped.status = firstNonEmpty(mapped.status, mapped.equipment_working_status, 'active');
+        mapped.hours_idle = firstNonEmpty(mapped.hours_idle, mapped.total_monthly_hours, mapped.idle_hours, 0);
+      }
+
+      if (module === 'progress') {
+        mapped.discipline = firstNonEmpty(mapped.discipline, mapped.trade, mapped.activity, mapped.package, 'General');
+        mapped.planned_progress = firstNonEmpty(mapped.planned_progress, mapped.planned_qty, mapped.scope, mapped.target, 0);
+        mapped.actual_progress = firstNonEmpty(mapped.actual_progress, mapped.executed_qty, mapped.total_achieved, mapped.monthly_achieved, 0);
+      }
+
+      if (module === 'cost') {
+        mapped.discipline = firstNonEmpty(mapped.discipline, mapped.department, mapped.category, mapped.particulars, mapped.project_package, 'General');
+        mapped.actual_amount = firstNonEmpty(
+          mapped.actual_amount,
+          mapped.lpo_amount,
+          mapped.amount,
+          mapped.total,
+          mapped.s2a,
+          mapped.s4a,
+          mapped.s4b,
+          0
+        );
+        mapped.budget_amount = firstNonEmpty(mapped.budget_amount, mapped.actual_amount, 0);
+      }
+
+      if (!mapped.date && !mapped.timestamp && contextDate) {
+        mapped.date = contextDate;
+        mapped.timestamp = contextDate;
+      }
+
       const hasAnyValue = Object.values(mapped).some((value) => value !== '');
       if (!hasAnyValue) return null;
 
       const requiredByModule: Record<Module, string[]> = {
         manpower: ['date', 'discipline'],
-        equipment: ['timestamp', 'discipline'],
+        equipment: ['discipline', 'equipment_id'],
         progress: ['date', 'discipline'],
-        cost: ['date', 'discipline'],
+        cost: ['date', 'actual_amount'],
       };
 
       if (requiredByModule[module].every((key) => !mapped[key])) {
@@ -130,6 +255,19 @@ function mapRows(
       return mapped;
     })
     .filter((row): row is Record<string, unknown> => Boolean(row));
+}
+
+function detectContextDate(fileName: string, previewRows: unknown[][]): string {
+  const fromFileName = extractIsoDateFromText(fileName);
+  if (fromFileName) return fromFileName;
+
+  const flatCells = previewRows.flat().slice(0, 300);
+  for (const cell of flatCells) {
+    const date = extractIsoDateFromText(cell);
+    if (date) return date;
+  }
+
+  return new Date().toISOString().split('T')[0];
 }
 
 export default function UploadZone({ module, onSpecLoaded, readOnly = false }: Props) {
@@ -151,31 +289,75 @@ export default function UploadZone({ module, onSpecLoaded, readOnly = false }: P
         const XLSX = await import('xlsx');
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
 
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rawData = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' }) as unknown[][];
+        const candidates: Array<{
+          sheetName: string;
+          mappedRows: Record<string, unknown>[];
+          quality: number;
+        }> = [];
 
-        if (!rawData.length || rawData.length < 2) {
-          throw new Error('File appears to be empty or missing headers.');
+        for (const sheetName of workbook.SheetNames) {
+          const sheet = workbook.Sheets[sheetName];
+          if (!sheet || !sheet['!ref']) continue;
+
+          const decodedRange = XLSX.utils.decode_range(sheet['!ref']);
+          const maxCol = decodedRange.e.c;
+          const previewEndRow = Math.min(decodedRange.e.r, SHEET_SCAN_ROWS);
+          const previewRange = { s: { r: 0, c: 0 }, e: { r: previewEndRow, c: maxCol } };
+
+          const previewRows = XLSX.utils.sheet_to_json(sheet, {
+            header: 1,
+            defval: '',
+            blankrows: false,
+            range: previewRange,
+          }) as unknown[][];
+
+          if (!previewRows.length) continue;
+
+          const header = detectHeaderRow(previewRows);
+          if (!header) continue;
+
+          const dataStartRow = header.index;
+          const dataEndRow = Math.min(decodedRange.e.r, dataStartRow + MAX_DATA_ROWS);
+          const dataRange = { s: { r: dataStartRow, c: 0 }, e: { r: dataEndRow, c: maxCol } };
+
+          const rawData = XLSX.utils.sheet_to_json(sheet, {
+            header: 1,
+            defval: '',
+            blankrows: false,
+            range: dataRange,
+          }) as unknown[][];
+
+          if (!rawData.length || rawData.length < 2) continue;
+
+          const headers = rawData[0].map((cell) => cleanCell(cell));
+          const rows = rawData.slice(1);
+          const columnMap = buildColumnMap(headers);
+          const contextDate = detectContextDate(file.name, previewRows);
+          const mappedRows = mapRows(module, headers, rows, columnMap, contextDate);
+
+          if (mappedRows.length === 0) continue;
+
+          const quality =
+            mappedRows.length + header.score * 10 + sheetHintScore(module, sheetName) * 20;
+
+          candidates.push({ sheetName, mappedRows, quality });
         }
 
-        const headers = rawData[0].map((cell) => String(cell).trim());
-        const rows = rawData.slice(1);
-        const columnMap = buildColumnMap(headers);
-
-        setState({ status: 'processing', fileName: file.name });
-
-        const mappedRows = mapRows(module, headers, rows, columnMap);
-        if (mappedRows.length === 0) {
-          throw new Error('No usable rows found. Check column names and row values.');
+        if (candidates.length === 0) {
+          throw new Error('No usable rows found. Check sheet layout, headers, and row values.');
         }
 
-        const spec = buildDashboardSpec(module, mappedRows);
+        const best = [...candidates].sort((a, b) => b.quality - a.quality)[0];
+
+        setState({ status: 'processing', fileName: `${file.name} - ${best.sheetName}` });
+
+        const spec = buildDashboardSpec(module, best.mappedRows);
         onSpecLoaded({
           spec,
-          recordsSample: mappedRows.slice(0, 20),
+          recordsSample: best.mappedRows.slice(0, 20),
         });
 
-        setState({ status: 'done', fileName: file.name });
+        setState({ status: 'done', fileName: `${file.name} - ${best.sheetName}` });
       } catch (error) {
         console.error('Upload parse error:', error);
         setState({
@@ -289,3 +471,4 @@ export default function UploadZone({ module, onSpecLoaded, readOnly = false }: P
     </div>
   );
 }
+

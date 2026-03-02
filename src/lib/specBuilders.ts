@@ -6,9 +6,14 @@ type AnyRow = Record<string, unknown>;
 function toNumber(...values: unknown[]): number {
   for (const value of values) {
     if (value === null || value === undefined || value === '') continue;
-    const cleaned = String(value).replace(/,/g, '').trim();
+    const raw = String(value).trim();
+    if (!raw) continue;
+    const isNegativeWrapped = /^\(.*\)$/.test(raw);
+    const stripped = raw.replace(/[(),]/g, '');
+    const cleaned = stripped.replace(/[^0-9.-]/g, '').trim();
+    if (!cleaned) continue;
     const parsed = Number(cleaned);
-    if (!Number.isNaN(parsed)) return parsed;
+    if (!Number.isNaN(parsed)) return isNegativeWrapped ? -Math.abs(parsed) : parsed;
   }
   return 0;
 }
